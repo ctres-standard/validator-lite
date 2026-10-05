@@ -9,7 +9,7 @@ It is a Python command-line tool and library. It reads a package directory, appl
 
 Section references (§) are to the text of the Standard, published at <https://ctres.org> and in [ctres-standard/spec](https://github.com/ctres-standard/spec).
 
-Status: the Standard is a draft for consultation. It carries no regulatory force and is not endorsed by any authority. validator-lite has the same status.
+Status: the Standard is an open draft for consultation with authorities and industry; it is independent and carries no regulatory force. validator-lite has the same status.
 
 ## What it checks
 
