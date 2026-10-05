@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r03_deposit.schema.json",
+  "title": "CTRES v1.0 R3 Deposit",
+  "description": "What came in, from which instrument, when it was credited, and what was checked first (§4.3). The fields are defined in payment.schema.json, shared with R4; this schema fixes direction to deposit.",
+  "allOf": [
+    {
+      "$ref": "../payment.schema.json"
+    },
+    {
+      "properties": {
+        "direction": {
+          "const": "deposit"
+        }
+      },
+      "required": [
+        "direction"
+      ]
+    }
+  ]
+}

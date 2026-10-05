@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r05_check_decision.schema.json",
+  "title": "CTRES v1.0 R5 Check Decision",
+  "description": "Any control that runs before money moves, recorded in a common vocabulary so that outcomes remain comparable across providers and registers (§4.5). Checks of type blockchain_analytics may carry the virtual-asset module field exposure_categories (§6).",
+  "type": "object",
+  "properties": {
+    "check_id": {
+      "description": "Identifier of the check decision (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "subject_type": {
+      "description": "Kind of subject checked (§4.5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "player",
+        "instrument",
+        "transaction",
+        "address",
+        "provider"
+      ]
+    },
+    "subject_ref": {
+      "description": "Reference of the subject checked: a player_ref, instrument_id, tx_id, address or provider_id (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "subject_ref_scope": {
+      "description": "The player_ref_scope of the player checked, so that the player key pair is complete (§4.5; §4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where subject_type is player (§4.2).",
+      "$ref": "../common.schema.json#/$defs/player_ref_scope"
+    },
+    "check_type": {
+      "description": "Type of control (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/check_type"
+    },
+    "register_or_provider": {
+      "description": "The register, list or provider consulted (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "version": {
+      "description": "Version of the register, list or provider service consulted, for example a list publication date (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text_or_not_recorded"
+    },
+    "performed_by_party": {
+      "description": "Party that performed the check (§4.5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "operator",
+        "provider",
+        "authority_system",
+        "other"
+      ]
+    },
+    "performed_at": {
+      "description": "When the check was performed; must precede crediting or dispatch wherever the profile requires a prior check (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "result_class": {
+      "description": "Result in the common vocabulary (§4.5). The Standard does not prescribe scoring.",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "clear",
+        "low",
+        "medium",
+        "high",
+        "prohibited",
+        "match",
+        "no_match",
+        "error"
+      ]
+    },
+    "decision": {
+      "description": "Decision taken on the result (§4.5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "allow",
+        "step_up",
+        "block",
+        "freeze",
+        "return",
+        "refer"
+      ]
+    },
+    "decided_by": {
+      "description": "Whether the decision was automated or taken by an analyst (§4.5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "automated",
+        "analyst"
+      ]
+    },
+    "supersedes": {
+      "description": "Earlier decision this one replaces, for example a step-up followed by allow (§4.5).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where this decision replaces an earlier decision on the same subject (§4.5).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "evidence_ref": {
+      "description": "Where the underlying report is retained (§4.5).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    }
+  },
+  "required": [
+    "check_id",
+    "subject_type",
+    "subject_ref",
+    "check_type",
+    "register_or_provider",
+    "version",
+    "performed_by_party",
+    "performed_at",
+    "result_class",
+    "decision",
+    "decided_by",
+    "evidence_ref"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "subject_type": {
+            "const": "player"
+          }
+        },
+        "required": [
+          "subject_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "subject_ref_scope"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "check_type": {
+            "const": "blockchain_analytics"
+          }
+        },
+        "required": [
+          "check_type"
+        ]
+      },
+      "then": {
+        "$ref": "../rail_modules.schema.json#/$defs/check_virtual_asset"
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

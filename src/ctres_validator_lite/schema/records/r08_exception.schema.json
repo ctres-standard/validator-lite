@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r08_exception.schema.json",
+  "title": "CTRES v1.0 R8 Exception",
+  "description": "Anything the operator could not explain, in a common vocabulary, with a value, an age and an owner (§4.8).",
+  "type": "object",
+  "properties": {
+    "exception_id": {
+      "description": "Exception identifier (§4.8).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "category": {
+      "description": "Category from the closed list (§4.8). The first fourteen values are the categories §4.8 lists; duplicate_credit, provider_credit_not_booked and unexplained_difference are carried forward from the Curaçao edition.",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "external_movement_without_ledger_entry",
+        "ledger_entry_without_external_movement",
+        "amount_mismatch",
+        "check_missing_or_after_crediting",
+        "payout_to_ineligible_instrument",
+        "payout_outside_closed_loop_without_justification",
+        "holder_mismatch",
+        "credit_funded_instrument_where_prohibited",
+        "payout_after_profile_deadline",
+        "purpose_class_crossing_without_justification",
+        "location_outside_inventory",
+        "provider_without_due_diligence_or_authorisation",
+        "coverage_shortfall",
+        "tax_not_remitted_by_due_date",
+        "duplicate_credit",
+        "provider_credit_not_booked",
+        "unexplained_difference"
+      ]
+    },
+    "raised_at": {
+      "description": "When the exception was raised (§4.8).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "raised_by": {
+      "description": "The process that raised it (§4.8).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "source_statement_id": {
+      "description": "The R7 statement that produced the exception (§4.8; Curaçao edition R8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the exception arose from a reconciliation statement (§4.8).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "related_record_ids": {
+      "description": "Related records: transactions, locations, movements, statements, rail references (§4.8).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_list",
+      "minItems": 1
+    },
+    "amount": {
+      "description": "Value of the exception (§4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the exception has a value (§4.8).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "currency_or_asset": {
+      "description": "Currency or asset of amount (§4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where amount is present (§4.8).",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "amount_reporting_ccy": {
+      "description": "Value of the exception in the reporting currency (§4.8; §3 Currency-aware).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where amount is present (§4.8).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "status": {
+      "description": "Status of the exception (§4.8).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "open",
+        "under_review",
+        "resolved",
+        "accepted_risk"
+      ]
+    },
+    "resolved_at": {
+      "description": "When the exception was resolved or the risk accepted (§4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is resolved or accepted_risk (§4.8).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "age_days": {
+      "description": "Age in days since the exception was raised, at period end or at resolution (§4.8).",
+      "x-ctres-req": "M",
+      "type": "integer",
+      "minimum": 0
+    },
+    "resolution_code": {
+      "description": "How the exception was closed, as a snake_case code (§4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is resolved or accepted_risk (§4.8).",
+      "$ref": "../common.schema.json#/$defs/snake_code"
+    },
+    "resolution_note": {
+      "description": "Resolution, in words (§4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is resolved or accepted_risk (§4.8).",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "owner": {
+      "description": "Role accountable for closing the exception (§4.8).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    }
+  },
+  "required": [
+    "exception_id",
+    "category",
+    "raised_at",
+    "raised_by",
+    "related_record_ids",
+    "status",
+    "age_days",
+    "owner"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "resolved",
+              "accepted_risk"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "resolved_at",
+          "resolution_code",
+          "resolution_note"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "open",
+              "under_review"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "resolved_at": false
+        }
+      }
+    }
+  ],
+  "dependentRequired": {
+    "amount": [
+      "currency_or_asset",
+      "amount_reporting_ccy"
+    ],
+    "amount_reporting_ccy": [
+      "amount"
+    ]
+  },
+  "unevaluatedProperties": false
+}

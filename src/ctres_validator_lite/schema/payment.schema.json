@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/payment.schema.json",
+  "title": "CTRES v1.0 R3 Deposit and R4 Withdrawal (shared payment record)",
+  "description": "The two records that carry the money (§4.3, §4.4). Both reference the instrument, the checks relied upon and the ledger entry. This schema defines the fields shared by R3 and R4; records/r03_deposit.schema.json and records/r04_withdrawal.schema.json fix the direction. Rail-module fields (§6) are permitted only for the rail they belong to.",
+  "type": "object",
+  "properties": {
+    "tx_id": {
+      "description": "Internal transaction identifier (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "player_ref": {
+      "description": "Pseudonymous player reference, as in R2 (§4.3; §4.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/player_ref"
+    },
+    "player_ref_scope": {
+      "description": "Brand or licence the player reference belongs to, as in R2 (§4.3; §4.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/player_ref_scope"
+    },
+    "direction": {
+      "description": "Direction of the payment (§4.3).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "deposit",
+        "withdrawal"
+      ]
+    },
+    "rail": {
+      "description": "Rail used (§4.3; §6).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/rail"
+    },
+    "instrument_id": {
+      "description": "The R2 instrument used (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "provider_id": {
+      "description": "Provider that handled the payment, from R10 (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "rail_reference": {
+      "description": "The identifier the rail itself issued: acquirer reference, end-to-end instant-payment identifier, mobile operator receipt, voucher serial or transaction hash (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "rail_reference_type": {
+      "description": "Kind of identifier carried in rail_reference (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/rail_reference_type"
+    },
+    "authority_reference": {
+      "description": "Identifier issued by an authority's central system, hub or register (§4.3; §7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where an authority's central system, hub or register issues an identifier for the transaction (§4.3; §5 Mandatory hubs and gateways).",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "amount": {
+      "description": "Amount as transacted (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/non_negative_decimal"
+    },
+    "currency_or_asset": {
+      "description": "Currency or asset as transacted (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/currency_or_asset"
+    },
+    "amount_reporting_ccy": {
+      "description": "Value of the payment in the reporting currency, used to apply thresholds (§4.3; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/non_negative_decimal"
+    },
+    "fx_rate": {
+      "description": "Units of reporting currency per unit of currency_or_asset used to compute amount_reporting_ccy (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/non_negative_decimal"
+    },
+    "fx_source": {
+      "description": "Source of the rate in fx_rate (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "initiated_at": {
+      "description": "When the payment was initiated (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "settled_at": {
+      "description": "When the rail settled the payment (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "credited_at": {
+      "description": "When the player account was credited or debited: the moment that prior checks must precede (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "account_currency": {
+      "description": "Currency of the player account (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/currency_or_asset"
+    },
+    "account_fx_rate": {
+      "description": "Units of account_currency per unit of currency_or_asset applied at crediting or debiting (§4.3).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where account_currency differs from currency_or_asset (§4.3).",
+      "$ref": "common.schema.json#/$defs/non_negative_decimal"
+    },
+    "credited_amount": {
+      "description": "Amount posted to the player account, in account_currency: positive for a credit, negative for a debit (§4.3; sign convention of the Curaçao edition).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/decimal"
+    },
+    "ledger_entry_ref": {
+      "description": "The ledger entry that posted the amount (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "fees": {
+      "description": "Rail, provider and network fees charged to the player, separated (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/fees"
+    },
+    "operator_cost_reporting_ccy": {
+      "description": "Rail or network costs borne by the operator, in the reporting currency (§4.3).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/non_negative_decimal"
+    },
+    "tax_lines": {
+      "description": "Taxes levied or withheld at this payment (§4.3).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where tax is levied or withheld at this payment under the applicable profile (§4.3; §5 Taxes at the point of payment).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.schema.json#/$defs/tax_line"
+      }
+    },
+    "check_ids": {
+      "description": "R5 decisions in force at the moment of crediting or dispatch (§4.3).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/check_refs"
+    },
+    "limit_check": {
+      "description": "Result of the limit check applied to the payment (§4.3).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile sets deposit or cross-operator limits that apply to the payment (§4.3; §5 Cross-operator limits and registers).",
+      "type": "string",
+      "enum": [
+        "within_limit",
+        "blocked",
+        "reduced",
+        "not_applicable",
+        "not_recorded"
+      ]
+    },
+    "outcome": {
+      "description": "Outcome of the payment (§4.3).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "accepted",
+        "rejected",
+        "frozen",
+        "returned",
+        "pending_review"
+      ]
+    },
+    "location_id": {
+      "description": "The R1 funds location that received or sent the payment, where known (§4.1; generalises operator_wallet_id of the Curaçao edition).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "attestation_ref": {
+      "description": "The R11 attestation that covers the payment (§4.11; Curaçao edition R3/R4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the payment passed through a funds location whose custody_model is omnibus_at_provider (§4.7; §4.11).",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "requested_at": {
+      "description": "Withdrawals: when the player requested the payout; measures payout time against the profile's deadline (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where direction is withdrawal; not used for deposits (§4.4).",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "paid_at": {
+      "description": "Withdrawals: when the payout was paid (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where direction is withdrawal; not used for deposits (§4.4).",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "destination_rule": {
+      "description": "Withdrawals: the closed-loop evidence (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where direction is withdrawal; not used for deposits (§4.4).",
+      "$ref": "common.schema.json#/$defs/destination_rule"
+    },
+    "source_instrument_ids": {
+      "description": "Withdrawals: deposit instruments the payout is matched to (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Withdrawals where destination_rule is same_instrument or same_holder_other_instrument (§4.4).",
+      "$ref": "common.schema.json#/$defs/identifier_list"
+    },
+    "approved_by": {
+      "description": "The person or rule that released the payment (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where direction is withdrawal; optional for a deposit released after review (§4.4).",
+      "$ref": "common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "approved_at": {
+      "description": "When the payment was released (§4.4).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where direction is withdrawal; optional for a deposit released after review (§4.4).",
+      "$ref": "common.schema.json#/$defs/datetime_or_not_recorded"
+    }
+  },
+  "required": [
+    "tx_id",
+    "player_ref",
+    "player_ref_scope",
+    "direction",
+    "rail",
+    "instrument_id",
+    "provider_id",
+    "rail_reference",
+    "rail_reference_type",
+    "amount",
+    "currency_or_asset",
+    "amount_reporting_ccy",
+    "fx_rate",
+    "fx_source",
+    "initiated_at",
+    "settled_at",
+    "credited_at",
+    "account_currency",
+    "credited_amount",
+    "ledger_entry_ref",
+    "fees",
+    "check_ids",
+    "outcome"
+  ],
+  "allOf": [
+    {
+      "$ref": "common.schema.json#/$defs/player_key"
+    },
+    {
+      "if": {
+        "properties": {
+          "direction": {
+            "const": "withdrawal"
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "then": {
+        "required": [
+          "requested_at",
+          "paid_at",
+          "destination_rule",
+          "approved_by",
+          "approved_at"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "direction": {
+            "const": "deposit"
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "then": {
+        "properties": {
+          "requested_at": false,
+          "paid_at": false,
+          "destination_rule": false,
+          "source_instrument_ids": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "destination_rule": {
+            "enum": [
+              "same_instrument",
+              "same_holder_other_instrument"
+            ]
+          }
+        },
+        "required": [
+          "destination_rule"
+        ]
+      },
+      "then": {
+        "required": [
+          "source_instrument_ids"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "virtual_asset"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "$ref": "rail_modules.schema.json#/$defs/transaction_virtual_asset"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "cash"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "$ref": "rail_modules.schema.json#/$defs/transaction_cash"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "voucher"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "$ref": "rail_modules.schema.json#/$defs/transaction_voucher"
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

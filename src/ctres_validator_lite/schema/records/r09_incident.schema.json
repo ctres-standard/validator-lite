@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r09_incident.schema.json",
+  "title": "CTRES v1.0 R9 Incident",
+  "description": "Events an authority must be told about, with the deadline clock set by the profile (§4.9).",
+  "type": "object",
+  "properties": {
+    "incident_id": {
+      "description": "Incident identifier (§4.9).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "category": {
+      "description": "Incident category (§4.9). Generalised from the Curaçao edition list; other covers events a profile names that fit no listed category.",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "sanctioned_exposure",
+        "balance_discrepancy",
+        "coverage_shortfall",
+        "security_breach",
+        "rail_disruption",
+        "other"
+      ]
+    },
+    "detected_at": {
+      "description": "When the operator detected the incident (§4.9).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "notified_at": {
+      "description": "When the authority was notified (§4.9). The interval to detected_at is computed, not declared.",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is notified, under_investigation or closed (§4.9).",
+      "$ref": "../common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "deadline_at": {
+      "description": "The notification deadline that applied, set by the profile (§4.9).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "authority": {
+      "description": "The authority to be notified (§4.9).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "channel": {
+      "description": "The channel used (§4.9).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is notified, under_investigation or closed (§4.9).",
+      "$ref": "../common.schema.json#/$defs/reporting_channel"
+    },
+    "channel_name": {
+      "description": "Name of the specific channel, for example the regulator's portal (§4.9).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "related_record_ids": {
+      "description": "Records affected, by identifier (§4.9; §8.1 Incident mode).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_list"
+    },
+    "status": {
+      "description": "Status of the incident (§4.9).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "pending_notification",
+        "notified",
+        "under_investigation",
+        "closed"
+      ]
+    },
+    "description": {
+      "description": "What happened, without personal data (§4.9; §12).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/text"
+    }
+  },
+  "required": [
+    "incident_id",
+    "category",
+    "detected_at",
+    "deadline_at",
+    "authority",
+    "related_record_ids",
+    "status"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "notified",
+              "under_investigation",
+              "closed"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "notified_at",
+          "channel"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending_notification"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "notified_at": false
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

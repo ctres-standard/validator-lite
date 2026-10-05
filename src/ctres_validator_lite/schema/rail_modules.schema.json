@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/rail_modules.schema.json",
+  "title": "CTRES v1.0 rail modules",
+  "description": "Rail-module fields (§6). Each rail adds the identifiers it naturally carries. Within a module, x-ctres-req M means mandatory whenever the module applies. instrument_* definitions give the shape of R2 instrument_detail; transaction_* definitions add fields to R3 and R4; location_* and check_* definitions add fields to R1 and R5. The record schemas select a module by the value of rail (or location_type, or check_type).",
+  "x-ctres-rail-to-module": {
+    "card": "card",
+    "bank_transfer": "bank_transfer",
+    "emoney": "emoney",
+    "mobile_money": "mobile_money",
+    "carrier_billing": "mobile_money",
+    "voucher": "voucher",
+    "cash": "cash",
+    "virtual_asset": "virtual_asset"
+  },
+  "$defs": {
+    "instrument_card": {
+      "description": "Card module: instrument_detail for rail card (§6). The card number itself is never carried.",
+      "type": "object",
+      "properties": {
+        "bin": {
+          "description": "Bank identification number: the first six to eight digits of the card number (§6).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "pattern": "^\\d{6,8}$"
+        },
+        "last_four": {
+          "description": "Last four digits of the card number (§6).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "pattern": "^\\d{4}$"
+        },
+        "card_token": {
+          "description": "Tokenised card number issued by the provider or a token service (§6).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "required": [
+        "bin",
+        "last_four"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_bank_transfer": {
+      "description": "Bank transfer and instant payments module: instrument_detail for rail bank_transfer (§6).",
+      "type": "object",
+      "properties": {
+        "account_number_masked": {
+          "description": "Masked account number; masked characters are written as * (§4.2; §6; §12).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier",
+          "pattern": "\\*"
+        },
+        "scheme": {
+          "description": "Scheme or system used, as a snake_case code, for example sepa_inst, pix, ted, interac, cbu_cvu or eft (§6).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        },
+        "instant_payment_key_type": {
+          "description": "Type of instant-payment key or alias used to address the account, as a snake_case code, for example national_id, email, phone or random_key (§4.2; §6).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where the account is addressed through an instant-payment key or alias (§6).",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        }
+      },
+      "required": [
+        "account_number_masked"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_emoney": {
+      "description": "E-money and e-wallet module: instrument_detail for rail emoney (§6).",
+      "type": "object",
+      "properties": {
+        "wallet_account_id_masked": {
+          "description": "Masked wallet account identifier; masked characters are written as * (§6; §12).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier",
+          "pattern": "\\*"
+        },
+        "funding_source_type": {
+          "description": "Type of source that funds the e-wallet, where the provider discloses it (§6).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/funding_type"
+        }
+      },
+      "required": [
+        "wallet_account_id_masked"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_mobile_money": {
+      "description": "Mobile money and carrier billing module: instrument_detail for rails mobile_money and carrier_billing (§6).",
+      "type": "object",
+      "properties": {
+        "phone_number_hash": {
+          "description": "Hashed phone number, as hexadecimal digest; the phone number itself is never carried (§4.2; §6; §12).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{32,128}$"
+        },
+        "mobile_operator_id": {
+          "description": "The mobile network operator, as a provider_id in R10 (§6; §4.10).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "required": [
+        "phone_number_hash"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_voucher": {
+      "description": "Vouchers and prepaid module: instrument_detail for rail voucher (§6). The holder is established at redemption.",
+      "type": "object",
+      "properties": {
+        "voucher_serial": {
+          "description": "Voucher serial number (§6).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "voucher_issuer_id": {
+          "description": "The voucher issuer, as a provider_id in R10 (§6; §4.10).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "required": [
+        "voucher_serial"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_cash": {
+      "description": "Cash at retail or venue module: instrument_detail for rail cash (§6).",
+      "type": "object",
+      "properties": {
+        "retail_point_id": {
+          "description": "Retail point, point of sale or cage at which cash is accepted or paid (§6).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "retail_point_type": {
+          "description": "Kind of retail point (§6).",
+          "x-ctres-req": "O",
+          "type": "string",
+          "enum": [
+            "retail_point",
+            "cage",
+            "agent"
+          ]
+        }
+      },
+      "required": [
+        "retail_point_id"
+      ],
+      "additionalProperties": false
+    },
+    "instrument_virtual_asset": {
+      "description": "Virtual-asset module: instrument_detail for rail virtual_asset (§6). The link between an address and a player is personal data (§12).",
+      "type": "object",
+      "properties": {
+        "chain": {
+          "description": "Network on which the address exists, as a snake_case code, for example ethereum or tron (§6; §8.2).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        },
+        "address": {
+          "description": "Wallet address linked to the player (§4.2; §6).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "unique_deposit_address": {
+          "description": "Whether the operator allocated this deposit address to this player alone, which makes attribution direct (§6; Curaçao edition R2).",
+          "x-ctres-req": "O",
+          "type": "boolean"
+        },
+        "link_source": {
+          "description": "How the link became known (§6; Curaçao edition R2).",
+          "x-ctres-req": "O",
+          "type": "string",
+          "enum": [
+            "deposit_observed",
+            "player_declared",
+            "provider_supplied"
+          ]
+        }
+      },
+      "required": [
+        "chain",
+        "address"
+      ],
+      "additionalProperties": false
+    },
+    "transaction_virtual_asset": {
+      "description": "Virtual-asset module: fields added to R3 and R4 where rail is virtual_asset (§6; Curaçao edition R3/R4).",
+      "properties": {
+        "chain": {
+          "description": "Network on which the payment was made, as a snake_case code (§6; §8.2).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        },
+        "off_chain_movement": {
+          "description": "True where the movement happened inside a provider's books and has no transaction on chain (§6 off-chain flag).",
+          "x-ctres-req": "M",
+          "type": "boolean"
+        },
+        "tx_hash": {
+          "description": "Transaction hash on chain (§6).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where off_chain_movement is false (§6).",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "block_time": {
+          "description": "Time of the block that included the transaction (§6).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where off_chain_movement is false (§6).",
+          "$ref": "common.schema.json#/$defs/datetime"
+        },
+        "confirmations": {
+          "description": "Number of confirmations at crediting or dispatch (§6).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where off_chain_movement is false (§6).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "counterparty_address": {
+          "description": "The player's address for a deposit, or the destination address for a withdrawal (§6).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where off_chain_movement is false (§6).",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "counterparty_type": {
+          "description": "Type of the counterparty address (§6 counterparty type).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where off_chain_movement is false (§6).",
+          "type": "string",
+          "enum": [
+            "unhosted",
+            "vasp",
+            "processor",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "chain",
+        "off_chain_movement"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "off_chain_movement": {
+                "const": false
+              }
+            },
+            "required": [
+              "off_chain_movement"
+            ]
+          },
+          "then": {
+            "required": [
+              "tx_hash",
+              "block_time",
+              "confirmations",
+              "counterparty_address",
+              "counterparty_type"
+            ]
+          }
+        }
+      ]
+    },
+    "transaction_cash": {
+      "description": "Cash at retail or venue module: fields added to R3 and R4 where rail is cash (§6). The receipt is carried in rail_reference.",
+      "properties": {
+        "retail_point_id": {
+          "description": "Retail point or cage identifier (§6).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "cashier_ref": {
+          "description": "Pseudonymous reference of the cashier who handled the cash (§6).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "required": [
+        "retail_point_id"
+      ]
+    },
+    "transaction_voucher": {
+      "description": "Vouchers and prepaid module: fields added to R3 and R4 where rail is voucher (§6). The voucher serial is carried in rail_reference and the issuer in provider_id.",
+      "properties": {
+        "retail_point_id": {
+          "description": "Point of sale at which the voucher was sold (§6).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      }
+    },
+    "location_virtual_asset": {
+      "description": "Virtual-asset module: fields added to R1 where location_type is crypto_wallet (§6: wallet temperature and key-control models carried forward from the Curaçao edition).",
+      "properties": {
+        "chain": {
+          "description": "Network on which the wallet is held, as a snake_case code (§6).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        },
+        "temperature": {
+          "description": "Wallet temperature (§6).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "enum": [
+            "hot",
+            "warm",
+            "cold"
+          ]
+        },
+        "key_control_model": {
+          "description": "How the keys are controlled (§6; Curaçao edition R1).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "enum": [
+            "single_sig",
+            "multi_sig",
+            "mpc",
+            "hsm",
+            "provider_managed"
+          ]
+        },
+        "approvers": {
+          "description": "Roles authorised to move funds from the wallet (§6; Curaçao edition R1).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where temperature is warm or cold (Curaçao edition R1).",
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "chain",
+        "temperature",
+        "key_control_model"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "temperature": {
+                "enum": [
+                  "warm",
+                  "cold"
+                ]
+              }
+            },
+            "required": [
+              "temperature"
+            ]
+          },
+          "then": {
+            "required": [
+              "approvers"
+            ]
+          }
+        }
+      ]
+    },
+    "check_virtual_asset": {
+      "description": "Virtual-asset module: fields added to R5 where check_type is blockchain_analytics (§6; Curaçao edition R5).",
+      "properties": {
+        "exposure_categories": {
+          "description": "Exposure categories reported by the analytics provider (§6; Curaçao edition R5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Only where check_type is blockchain_analytics (§6).",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "sanctions",
+              "mixer",
+              "darknet",
+              "fraud",
+              "stolen_funds",
+              "gambling",
+              "exchange",
+              "other"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

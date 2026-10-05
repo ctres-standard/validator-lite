@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r07_reconciliation_statement.schema.json",
+  "title": "CTRES v1.0 R7 Reconciliation Statement",
+  "description": "Location and coverage statements that turn reconciliation from a claim into a number (§4.7). The custody model declared in R1 selects the reconciliation profile.",
+  "type": "object",
+  "properties": {
+    "statement_id": {
+      "description": "Statement identifier (§4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "kind": {
+      "description": "Kind of statement: one location statement per funds location per period, and one coverage statement per licence per period, or per day where the profile requires (§4.7).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "location",
+        "coverage"
+      ]
+    },
+    "period_start": {
+      "description": "Start of the period covered (§4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the period covered (§4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "currency_or_asset": {
+      "description": "Currency or asset in which the statement's amounts are stated (§4.7; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "location_id": {
+      "description": "The R1 funds location reconciled (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "external_source_type": {
+      "description": "Kind of external source the balances were taken from (§4.7; §6 External evidence for reconciliation).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "type": "string",
+      "enum": [
+        "acquirer_settlement_report",
+        "bank_statement",
+        "instant_payment_confirmations",
+        "provider_statement",
+        "mobile_operator_statement",
+        "issuer_redemption_report",
+        "till_reconciliation",
+        "chain"
+      ]
+    },
+    "opening_balance_external": {
+      "description": "Opening balance from the external source: bank statement, provider settlement report, mobile operator statement or chain (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "closing_balance_external": {
+      "description": "Closing balance from the external source (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "opening_balance_ledger": {
+      "description": "Opening balance in the operator's ledger (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "closing_balance_ledger": {
+      "description": "Closing balance in the operator's ledger (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "opening_balance_provider": {
+      "description": "Opening balance reported by the provider (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Location statements where the location's custody_model in R1 is omnibus_at_provider (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "closing_balance_provider": {
+      "description": "Closing balance reported by the provider (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Location statements where the location's custody_model in R1 is omnibus_at_provider (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "inflow_total": {
+      "description": "Total inflows in the period (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "outflow_total": {
+      "description": "Total outflows in the period (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "fees_total": {
+      "description": "Total fees in the period (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "unexplained_delta": {
+      "description": "The unexplained delta at period end, external less ledger, stated rather than hidden (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; not used on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "unexplained_delta_reporting_ccy": {
+      "description": "The unexplained delta in the reporting currency (§4.7; §3 Currency-aware).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "exception_ids": {
+      "description": "R8 exceptions raised for the statement; an empty list states that none were raised (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on location statements; optional on coverage statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/identifier_list"
+    },
+    "player_balances_total": {
+      "description": "Total player balances (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "pending_withdrawals_total": {
+      "description": "Total pending withdrawals (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "open_bets_total": {
+      "description": "Total open bets (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Coverage statements where the profile counts open bets in player liabilities (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "player_liability_total": {
+      "description": "Total player liabilities: player balances, pending withdrawals and, where counted, open bets (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "funds_held": {
+      "description": "Funds held against player liabilities, by protection mechanism (§4.7). Keys are protection_mechanism values.",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "../common.schema.json#/$defs/protection_mechanism"
+      },
+      "additionalProperties": {
+        "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+      }
+    },
+    "in_transit_total": {
+      "description": "Funds in transit (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "shortfall": {
+      "description": "Shortfall of funds held against liabilities; zero where there is none (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory on coverage statements; not used on location statements (§4.7).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "shortfall_cured_at": {
+      "description": "When the shortfall was cured (§4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Coverage statements with a shortfall greater than zero that has been cured (§4.7).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "evidence_refs": {
+      "description": "References to the supporting statements retained (§4.7; §7).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier_list"
+    },
+    "prepared_by": {
+      "description": "Who prepared the statement (§4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "reviewed_by": {
+      "description": "Who reviewed the statement (§4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    }
+  },
+  "required": [
+    "statement_id",
+    "kind",
+    "period_start",
+    "period_end",
+    "currency_or_asset",
+    "prepared_by",
+    "reviewed_by"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "location"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "location_id",
+          "external_source_type",
+          "opening_balance_external",
+          "closing_balance_external",
+          "opening_balance_ledger",
+          "closing_balance_ledger",
+          "inflow_total",
+          "outflow_total",
+          "fees_total",
+          "unexplained_delta",
+          "exception_ids"
+        ],
+        "properties": {
+          "player_balances_total": false,
+          "pending_withdrawals_total": false,
+          "player_liability_total": false,
+          "funds_held": false,
+          "in_transit_total": false,
+          "shortfall": false,
+          "open_bets_total": false,
+          "shortfall_cured_at": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "coverage"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "player_balances_total",
+          "pending_withdrawals_total",
+          "player_liability_total",
+          "funds_held",
+          "in_transit_total",
+          "shortfall"
+        ],
+        "properties": {
+          "location_id": false,
+          "external_source_type": false,
+          "opening_balance_external": false,
+          "closing_balance_external": false,
+          "opening_balance_ledger": false,
+          "closing_balance_ledger": false,
+          "inflow_total": false,
+          "outflow_total": false,
+          "fees_total": false,
+          "unexplained_delta": false,
+          "opening_balance_provider": false,
+          "closing_balance_provider": false,
+          "unexplained_delta_reporting_ccy": false
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

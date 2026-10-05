@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r06_internal_movement.schema.json",
+  "title": "CTRES v1.0 R6 Internal Movement",
+  "description": "Movements between the operator's own funds locations (settlement from a provider to a bank, sweeps, tax remittance), which is where segregation either holds or breaks (§4.6).",
+  "type": "object",
+  "properties": {
+    "movement_id": {
+      "description": "Movement identifier (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "source_location_id": {
+      "description": "Source funds location, from R1 (§4.6).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Exactly one of source_location_id or source_provider_id is present; at least one side of the movement is a location in R1 (§4.6).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "source_provider_id": {
+      "description": "Source provider, from R10, where the source is not a location in R1, for example an exchange or a settlement account (§4.6).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Exactly one of source_location_id or source_provider_id is present; at least one side of the movement is a location in R1 (§4.6).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "destination_location_id": {
+      "description": "Destination funds location, from R1 (§4.6).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Exactly one of destination_location_id or destination_provider_id is present; at least one side of the movement is a location in R1 (§4.6).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "destination_provider_id": {
+      "description": "Destination provider, from R10, where the destination is not a location in R1 (§4.6).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Exactly one of destination_location_id or destination_provider_id is present; at least one side of the movement is a location in R1 (§4.6).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "purpose": {
+      "description": "Purpose of the movement (§4.6).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "settlement",
+        "sweep",
+        "liquidity",
+        "conversion",
+        "tax_remittance",
+        "correction"
+      ]
+    },
+    "crosses_purpose_class": {
+      "description": "Whether the movement crosses purpose classes (§4.6). Validation may recompute it from R1.",
+      "x-ctres-req": "M",
+      "type": "boolean"
+    },
+    "justification_ref": {
+      "description": "Justification for crossing purpose classes (§4.6).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where crosses_purpose_class is true (§4.6).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "approved_by": {
+      "description": "Approver of the movement (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "approved_at": {
+      "description": "Time of approval (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "executed_at": {
+      "description": "When the movement was executed on the rail (§4.6).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "rail_reference": {
+      "description": "Identifier the rail issued for the movement (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "rail_reference_type": {
+      "description": "Kind of identifier carried in rail_reference (§4.6; §4.3).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/rail_reference_type"
+    },
+    "amount": {
+      "description": "Amount moved (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "currency_or_asset": {
+      "description": "Currency or asset of the amount (§4.6; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "fees": {
+      "description": "Fees borne on the movement, separated (§4.6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/fees"
+    }
+  },
+  "required": [
+    "movement_id",
+    "purpose",
+    "crosses_purpose_class",
+    "approved_by",
+    "approved_at",
+    "rail_reference",
+    "amount",
+    "currency_or_asset",
+    "fees"
+  ],
+  "allOf": [
+    {
+      "anyOf": [
+        {
+          "required": [
+            "source_location_id"
+          ]
+        },
+        {
+          "required": [
+            "destination_location_id"
+          ]
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "required": [
+            "source_location_id"
+          ]
+        },
+        {
+          "required": [
+            "source_provider_id"
+          ]
+        }
+      ]
+    },
+    {
+      "oneOf": [
+        {
+          "required": [
+            "destination_location_id"
+          ]
+        },
+        {
+          "required": [
+            "destination_provider_id"
+          ]
+        }
+      ]
+    },
+    {
+      "if": {
+        "properties": {
+          "crosses_purpose_class": {
+            "const": true
+          }
+        },
+        "required": [
+          "crosses_purpose_class"
+        ]
+      },
+      "then": {
+        "required": [
+          "justification_ref"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

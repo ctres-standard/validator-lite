@@ -1,0 +1,477 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/common.schema.json",
+  "title": "CTRES v1.0 common definitions",
+  "description": "Types and enumerations shared by the CTRES v1.0 record, manifest and profile schemas. Common Transaction Reporting and Evidence Standard v1.0 (universal edition, 2 October 2026). Section references (§) are to that text.",
+  "$defs": {
+    "decimal": {
+      "description": "A decimal number written as a JSON string, never as a JSON number, so that no floating-point rounding can occur (§3 Currency-aware; §8.2). A leading minus sign is permitted.",
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$",
+      "examples": [
+        "150.00",
+        "-420.00",
+        "250.000000"
+      ]
+    },
+    "non_negative_decimal": {
+      "description": "A decimal string that is zero or positive (§8.2).",
+      "type": "string",
+      "pattern": "^\\d+(\\.\\d+)?$",
+      "examples": [
+        "0.00",
+        "1000.00"
+      ]
+    },
+    "datetime": {
+      "description": "Timestamp in ISO 8601 (RFC 3339 profile) with an explicit offset: Z or ±hh:mm (§8.2). Local times without an offset are not permitted.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$",
+      "examples": [
+        "2026-11-04T19:02:11+01:00",
+        "2026-11-04T10:12:44Z"
+      ]
+    },
+    "date": {
+      "description": "Calendar date in ISO 8601 extended format, YYYY-MM-DD (§8.2).",
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+      "examples": [
+        "2026-11-05"
+      ]
+    },
+    "date_or_datetime": {
+      "description": "A calendar date or a timestamp with an explicit offset (§8.2).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/date"
+        },
+        {
+          "$ref": "#/$defs/datetime"
+        }
+      ]
+    },
+    "duration": {
+      "description": "ISO 8601 duration, for example PT24H, P3D, P180D or P5Y. Used by profiles for windows, deadlines and retention periods (§5).",
+      "type": "string",
+      "pattern": "^P(?=\\d|T\\d)(\\d+Y)?(\\d+M)?(\\d+W)?(\\d+D)?(T(?=\\d)(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?)?$",
+      "examples": [
+        "PT120M",
+        "P5D",
+        "P10Y"
+      ]
+    },
+    "currency_code": {
+      "description": "ISO 4217 alphabetic currency code (§3; §8.2).",
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "examples": [
+        "EUR",
+        "KES",
+        "BRL"
+      ]
+    },
+    "asset_identifier": {
+      "description": "Identifier of a virtual asset by asset and chain or contract, for example USDT-ERC20 or BTC (§8.2: virtual assets by chain and contract).",
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9]+([-_.:/][A-Za-z0-9]+)*$",
+      "examples": [
+        "USDT-ERC20",
+        "BTC"
+      ]
+    },
+    "currency_or_asset": {
+      "description": "An ISO 4217 code or a virtual-asset identifier (§3 Currency-aware; §4.1; §4.3).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/currency_code"
+        },
+        {
+          "$ref": "#/$defs/asset_identifier"
+        }
+      ]
+    },
+    "country_code": {
+      "description": "ISO 3166-1 alpha-2 country code. User-assigned codes (for example XJ) are used only in fictional examples.",
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "examples": [
+        "MT",
+        "XJ"
+      ]
+    },
+    "jurisdiction_code": {
+      "description": "ISO 3166-1 alpha-2 country code, optionally followed by an ISO 3166-2 subdivision suffix, for example CA-ON (§5).",
+      "type": "string",
+      "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,3})?$",
+      "examples": [
+        "XJ",
+        "CA-ON"
+      ]
+    },
+    "identifier": {
+      "description": "A stable identifier: a non-empty string without leading or trailing white space (§4).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^\\S(.*\\S)?$"
+    },
+    "identifier_list": {
+      "description": "A list of distinct identifiers (§4).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identifier"
+      },
+      "uniqueItems": true
+    },
+    "text": {
+      "description": "Free text. Periodic packages are pseudonymous: free text never carries names, addresses or identity documents of players (§12).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "snake_code": {
+      "description": "A lower-case code in snake_case.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 128
+    },
+    "sha256": {
+      "description": "SHA-256 digest as 64 lower-case hexadecimal characters (§8.2).",
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "semver": {
+      "description": "Version number MAJOR.MINOR.PATCH (§13 Versioning).",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "examples": [
+        "1.0.0"
+      ]
+    },
+    "not_recorded": {
+      "description": "Visible gap (§3): where a control or event left no record, the field carries the literal value not_recorded instead of being omitted, so that an absence of evidence is visible and is not mistaken for an export error. Only fields whose schema says so accept this value.",
+      "const": "not_recorded"
+    },
+    "datetime_or_not_recorded": {
+      "description": "A timestamp with an explicit offset, or not_recorded where the event left no record (§3 Visible gaps; §8.2).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/datetime"
+        },
+        {
+          "$ref": "#/$defs/not_recorded"
+        }
+      ]
+    },
+    "date_or_not_recorded": {
+      "description": "A calendar date, or not_recorded where no record exists (§3 Visible gaps).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/date"
+        },
+        {
+          "$ref": "#/$defs/not_recorded"
+        }
+      ]
+    },
+    "identifier_or_not_recorded": {
+      "description": "An identifier, or not_recorded where the control left no record (§3 Visible gaps).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/identifier"
+        },
+        {
+          "$ref": "#/$defs/not_recorded"
+        }
+      ]
+    },
+    "text_or_not_recorded": {
+      "description": "Free text, or not_recorded where no record exists (§3 Visible gaps).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "$ref": "#/$defs/not_recorded"
+        }
+      ]
+    },
+    "check_refs": {
+      "description": "References to R5 check decisions, or not_recorded where no check decision exists for the event (§4.3; §3 Visible gaps). An empty list states that no check applied; not_recorded states that a check may have applied but left no record.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/identifier_list"
+        },
+        {
+          "$ref": "#/$defs/not_recorded"
+        }
+      ]
+    },
+    "player_ref": {
+      "description": "Pseudonymous player reference. Never a name, an identity document number or a contact detail (§4.2; §12).",
+      "$ref": "#/$defs/identifier"
+    },
+    "player_ref_scope": {
+      "description": "The brand or licence the player reference belongs to. A player is identified by player_ref_scope and player_ref together, so that the same reference in two brands is never merged (§4.2).",
+      "$ref": "#/$defs/identifier"
+    },
+    "player_key": {
+      "description": "The player key pair: player_ref_scope and player_ref, always carried together (§4.2).",
+      "type": "object",
+      "properties": {
+        "player_ref": {
+          "description": "Pseudonymous player reference (§4.2).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/player_ref"
+        },
+        "player_ref_scope": {
+          "description": "Brand or licence the player reference belongs to (§4.2).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/player_ref_scope"
+        }
+      },
+      "required": [
+        "player_ref",
+        "player_ref_scope"
+      ]
+    },
+    "rail": {
+      "description": "Payment rail (§4.2; §6). carrier_billing uses the mobile_money rail module.",
+      "type": "string",
+      "enum": [
+        "card",
+        "bank_transfer",
+        "emoney",
+        "mobile_money",
+        "carrier_billing",
+        "voucher",
+        "cash",
+        "virtual_asset"
+      ]
+    },
+    "rail_module": {
+      "description": "Identifier of a rail module (§6). Each rail value maps to one module; carrier_billing maps to mobile_money.",
+      "type": "string",
+      "enum": [
+        "card",
+        "bank_transfer",
+        "emoney",
+        "mobile_money",
+        "voucher",
+        "cash",
+        "virtual_asset"
+      ]
+    },
+    "rail_reference_type": {
+      "description": "Kind of identifier the rail itself issued (§4.3; §6): acquirer reference (card), end-to-end instant-payment identifier (bank transfer), mobile operator receipt or carrier billing reference (mobile money), voucher serial (voucher), cash receipt (cash), transaction hash (virtual assets), or the provider's own reference where no rail identifier exists, for example a pooled provider wallet.",
+      "type": "string",
+      "enum": [
+        "acquirer_reference",
+        "instant_payment_e2e_id",
+        "operator_receipt",
+        "billing_reference",
+        "voucher_serial",
+        "cash_receipt",
+        "transaction_hash",
+        "provider_reference"
+      ]
+    },
+    "purpose_class": {
+      "description": "Purpose class of a funds location (§4.1).",
+      "type": "string",
+      "enum": [
+        "player_funds",
+        "operational",
+        "treasury",
+        "tax_withheld",
+        "reserve_or_guarantee"
+      ]
+    },
+    "protection_mechanism": {
+      "description": "Mechanism protecting the funds held in a location (§4.1; §5 Player-funds protection and coverage).",
+      "type": "string",
+      "enum": [
+        "segregated_account",
+        "trust",
+        "separate_estate",
+        "guarantee",
+        "reserve",
+        "none"
+      ]
+    },
+    "custody_model": {
+      "description": "Custody model of a funds location; it selects the reconciliation profile (§4.1; §4.7).",
+      "type": "string",
+      "enum": [
+        "direct",
+        "omnibus_at_provider",
+        "hybrid"
+      ]
+    },
+    "funding_type": {
+      "description": "Funding type of a payment instrument (§4.2).",
+      "type": "string",
+      "enum": [
+        "debit",
+        "credit",
+        "prepaid",
+        "deferred",
+        "invoice",
+        "bnpl",
+        "unknown"
+      ]
+    },
+    "holder_verification_method": {
+      "description": "Method by which the instrument holder was verified (§4.2; §6).",
+      "type": "string",
+      "enum": [
+        "issuer_check",
+        "bank_name_check",
+        "open_banking",
+        "instant_payment_directory",
+        "mobile_operator_kyc",
+        "signed_message",
+        "micro_transfer",
+        "provider_attestation",
+        "document"
+      ]
+    },
+    "check_type": {
+      "description": "Type of control recorded in R5 (§4.5).",
+      "type": "string",
+      "enum": [
+        "identity",
+        "biometric",
+        "holder_match",
+        "sanctions",
+        "pep",
+        "eligibility_register",
+        "self_exclusion",
+        "limit",
+        "cross_operator_limit",
+        "credit_register",
+        "source_of_funds",
+        "financial_risk",
+        "fraud",
+        "blockchain_analytics",
+        "travel_rule"
+      ]
+    },
+    "destination_rule": {
+      "description": "Closed-loop evidence for a withdrawal (§4.4).",
+      "type": "string",
+      "enum": [
+        "same_instrument",
+        "same_holder_other_instrument",
+        "profile_route",
+        "exception"
+      ]
+    },
+    "report_type": {
+      "description": "Type of report filed with another authority (§4.12).",
+      "type": "string",
+      "enum": [
+        "suspicious_transaction_report",
+        "cash_threshold_report",
+        "virtual_currency_threshold_report",
+        "casino_disbursement_report",
+        "periodic_systematic_report",
+        "tax_remittance",
+        "regulator_notification"
+      ]
+    },
+    "reporting_channel": {
+      "description": "Channel through which a report or notification was filed (§4.12; §4.9).",
+      "type": "string",
+      "enum": [
+        "goaml",
+        "national_reporting_api",
+        "regulator_portal",
+        "other"
+      ]
+    },
+    "fees": {
+      "description": "Fees, separated by kind and stated in one currency or asset (§4.3). A kind that does not apply is stated as zero rather than omitted.",
+      "type": "object",
+      "properties": {
+        "currency_or_asset": {
+          "description": "Currency or asset in which the fees are stated (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/currency_or_asset"
+        },
+        "rail": {
+          "description": "Fees charged by the rail or scheme (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/non_negative_decimal"
+        },
+        "provider": {
+          "description": "Fees charged by the payment provider (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/non_negative_decimal"
+        },
+        "network": {
+          "description": "Network fees, for example a blockchain transaction fee (§4.3; §6).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/non_negative_decimal"
+        }
+      },
+      "required": [
+        "currency_or_asset",
+        "rail",
+        "provider",
+        "network"
+      ],
+      "additionalProperties": false
+    },
+    "tax_line": {
+      "description": "One tax levied or withheld at a payment (§4.3; §5 Taxes at the point of payment). Amounts are in the currency of the payment.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Kind of tax, as a snake_case code, for example excise_on_deposit, withholding_on_winnings or withholding_on_withdrawal (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/snake_code"
+        },
+        "rate": {
+          "description": "Rate applied, as a decimal fraction: 0.05 means 5% (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/non_negative_decimal"
+        },
+        "amount": {
+          "description": "Tax amount, in the currency of the payment (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/non_negative_decimal"
+        },
+        "authority": {
+          "description": "Authority to which the tax is due (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/text"
+        },
+        "due_at": {
+          "description": "Date or time by which the tax must be remitted (§4.3).",
+          "x-ctres-req": "M",
+          "$ref": "#/$defs/date_or_datetime"
+        },
+        "remittance_ref": {
+          "description": "Reference of the remittance that settled the tax (§4.3).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Once the tax has been remitted (§4.3; exception category tax_not_remitted_by_due_date in §4.8).",
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "type",
+        "rate",
+        "amount",
+        "authority",
+        "due_at"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

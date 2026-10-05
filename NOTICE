@@ -1,0 +1,17 @@
+CTRES validator-lite
+Copyright 2026 Dmitry Skachko and the CTRES contributors
+
+This product validates packages in the Common Transaction Reporting and Evidence
+Standard (CTRES) against the Structural and Referential classes of validation of
+the Standard. It is licensed under the Apache License, Version 2.0. See the
+LICENSE file.
+
+This product includes a copy of the CTRES JSON Schema (ctres-standard/schema),
+Copyright 2026 Dmitry Skachko and the CTRES contributors, licensed under the
+Apache License, Version 2.0.
+
+The text of the Standard is published separately under the Creative Commons
+Attribution 4.0 International licence (CC BY 4.0): https://ctres.org
+
+The packages in the demo directory are synthetic. They describe no real
+operator, player, provider or jurisdiction.

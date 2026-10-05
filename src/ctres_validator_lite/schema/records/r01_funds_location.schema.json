@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r01_funds_location.schema.json",
+  "title": "CTRES v1.0 R1 Funds Location",
+  "description": "Every place the operator holds money, in any form: the record that answers segregation and protection requirements (§4.1). Locations of type crypto_wallet carry the virtual-asset module fields (§6).",
+  "type": "object",
+  "properties": {
+    "location_id": {
+      "description": "Stable internal identifier of the funds location (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "location_type": {
+      "description": "Kind of location (§4.1).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "bank_account",
+        "provider_balance",
+        "mobile_money_collection",
+        "emoney_account",
+        "crypto_wallet",
+        "cash_float"
+      ]
+    },
+    "purpose_class": {
+      "description": "Purpose of the money held (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/purpose_class"
+    },
+    "provider_id": {
+      "description": "Institution holding the location, from R10 (§4.1).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where location_type is provider_balance, emoney_account or mobile_money_collection, or custody_model is omnibus_at_provider (§4.1; §4.7).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "identifier_masked": {
+      "description": "Masked account number, pay-bill or short code, or wallet address (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "currency_or_asset": {
+      "description": "ISO 4217 code or asset identifier of the money held (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "protection_mechanism": {
+      "description": "Mechanism protecting the money held (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/protection_mechanism"
+    },
+    "custody_model": {
+      "description": "Custody model; selects the reconciliation profile (§4.1; §4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/custody_model"
+    },
+    "controlling_entity": {
+      "description": "Legal entity that controls the location (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "location_jurisdiction": {
+      "description": "Country where the funds are held, for location rules (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/country_code"
+    },
+    "opened_at": {
+      "description": "When the location entered the inventory (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "closed_at": {
+      "description": "When the location left the inventory (§4.1).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the location has been closed (§4.1).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "ownership_evidence_ref": {
+      "description": "Reference to the proof of control held on file (§4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    }
+  },
+  "required": [
+    "location_id",
+    "location_type",
+    "purpose_class",
+    "identifier_masked",
+    "currency_or_asset",
+    "protection_mechanism",
+    "custody_model",
+    "controlling_entity",
+    "location_jurisdiction",
+    "opened_at",
+    "ownership_evidence_ref"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "location_type": {
+            "enum": [
+              "provider_balance",
+              "emoney_account",
+              "mobile_money_collection"
+            ]
+          }
+        },
+        "required": [
+          "location_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "provider_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "custody_model": {
+            "const": "omnibus_at_provider"
+          }
+        },
+        "required": [
+          "custody_model"
+        ]
+      },
+      "then": {
+        "required": [
+          "provider_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "location_type": {
+            "const": "crypto_wallet"
+          }
+        },
+        "required": [
+          "location_type"
+        ]
+      },
+      "then": {
+        "$ref": "../rail_modules.schema.json#/$defs/location_virtual_asset"
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

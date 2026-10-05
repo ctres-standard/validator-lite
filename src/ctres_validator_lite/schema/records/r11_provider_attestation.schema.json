@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r11_provider_attestation.schema.json",
+  "title": "CTRES v1.0 R11 Provider Attestation",
+  "description": "Where money sits in a provider's pooled account, the provider's statement standing in place of the operator's own statements (§4.11). It applies equally to a card acquirer's reserve, a mobile money collection account, an e-money balance and a virtual-asset provider's pooled wallet.",
+  "type": "object",
+  "properties": {
+    "attestation_id": {
+      "description": "Attestation identifier, referenced from R3 and R4 attestation_ref (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "provider_id": {
+      "description": "The attesting provider, from R10 (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "period_start": {
+      "description": "Start of the period covered (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the period covered (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "currency_or_asset": {
+      "description": "Currency or asset of the balances (§4.11; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "opening_balance": {
+      "description": "Balance held for the operator at period start (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "total_credited": {
+      "description": "Total credited in the period (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "total_debited": {
+      "description": "Total debited in the period (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "balance_held_for_operator": {
+      "description": "Balance held for the operator at period end (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "reference_scheme": {
+      "description": "The reference scheme that links the provider's records to the operator's, for example how provider references map to rail_reference in R3 and R4 (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "covers_location_ids": {
+      "description": "The R1 funds locations the attestation covers (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_list",
+      "minItems": 1
+    },
+    "signed_by": {
+      "description": "Who signed for the provider (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "signed_at": {
+      "description": "When the attestation was signed (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "evidence_ref": {
+      "description": "Where the signed attestation is kept (§4.11).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "signature": {
+      "description": "Detached electronic signature over the attestation, where the provider signs electronically (§4.11).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/text"
+    }
+  },
+  "required": [
+    "attestation_id",
+    "provider_id",
+    "period_start",
+    "period_end",
+    "currency_or_asset",
+    "opening_balance",
+    "total_credited",
+    "total_debited",
+    "balance_held_for_operator",
+    "reference_scheme",
+    "covers_location_ids",
+    "signed_by",
+    "signed_at",
+    "evidence_ref"
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r10_provider_register.schema.json",
+  "title": "CTRES v1.0 R10 Provider Register",
+  "description": "Each provider that handles player money, with its authorisation, due diligence and data location (§4.10).",
+  "type": "object",
+  "properties": {
+    "provider_id": {
+      "description": "Provider identifier, referenced from R1, R3, R4, R6 and R11 (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "legal_name": {
+      "description": "Legal name of the provider (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "provider_role": {
+      "description": "Role of the provider (§4.10).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "acquirer",
+        "bank",
+        "payment_service_provider",
+        "emoney_institution",
+        "mobile_money_operator",
+        "voucher_issuer",
+        "virtual_asset_service_provider",
+        "cash_agent"
+      ]
+    },
+    "authorising_authority": {
+      "description": "The authority that authorised the provider (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/text_or_not_recorded"
+    },
+    "licence_ref": {
+      "description": "The provider's licence or registration reference (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "authorisation_country": {
+      "description": "Country of the authorising authority (§4.10).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/country_code"
+    },
+    "regulator_notification_status": {
+      "description": "Whether the gambling regulator was notified of or approved the provider (§4.10).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile requires the gambling regulator to be notified of, or to approve, the provider (§4.10).",
+      "type": "string",
+      "enum": [
+        "notified",
+        "approved",
+        "pending",
+        "not_required"
+      ]
+    },
+    "due_diligence_completed_at": {
+      "description": "Date due diligence was completed (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/date_or_not_recorded"
+    },
+    "next_review_at": {
+      "description": "Date of the next due-diligence review (§4.10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/date"
+    },
+    "data_locations": {
+      "description": "Countries where the provider holds the data (§4.10).",
+      "x-ctres-req": "M",
+      "anyOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "../common.schema.json#/$defs/country_code"
+          }
+        },
+        {
+          "$ref": "../common.schema.json#/$defs/not_recorded"
+        }
+      ]
+    },
+    "travel_rule_capable": {
+      "description": "Whether the provider exchanges Travel Rule data (§4.10).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where provider_role is virtual_asset_service_provider (§4.10).",
+      "type": "boolean"
+    },
+    "evidence_ref": {
+      "description": "Where the due-diligence file is kept (§4.10; Curaçao edition R10).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    }
+  },
+  "required": [
+    "provider_id",
+    "legal_name",
+    "provider_role",
+    "authorising_authority",
+    "licence_ref",
+    "due_diligence_completed_at",
+    "next_review_at",
+    "data_locations",
+    "evidence_ref"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provider_role": {
+            "const": "virtual_asset_service_provider"
+          }
+        },
+        "required": [
+          "provider_role"
+        ]
+      },
+      "then": {
+        "required": [
+          "travel_rule_capable"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,1855 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/profile.schema.json",
+  "title": "CTRES v1.0 jurisdiction profile (structure)",
+  "description": "Structure of a jurisdiction profile: a configuration that turns the neutral record model into one authority's rule set (§5). This schema defines structure only. It carries no profile content, and it does not define how a package is tested against a profile; that is the conformance suite, maintained separately (§11).",
+  "type": "object",
+  "properties": {
+    "ctres_version": {
+      "description": "Version of the Standard whose record model the profile parameterises (§13 Versioning).",
+      "x-ctres-req": "M",
+      "const": "1.0"
+    },
+    "profile_id": {
+      "description": "Profile identifier: an ISO 3166 code, optionally with a subdivision or a base-profile suffix (§5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,8})*$"
+    },
+    "profile_version": {
+      "description": "Profile version. A new rule, a market opening or a change of regulator becomes a new profile version rather than an edit (§5; §13).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "title": {
+      "description": "Title of the profile (§5).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "fictional": {
+      "description": "True for an example profile that describes no real jurisdiction (§5). Defaults to false.",
+      "x-ctres-req": "O",
+      "type": "boolean",
+      "default": false
+    },
+    "jurisdiction": {
+      "description": "Jurisdiction the profile applies to (§5).",
+      "x-ctres-req": "M",
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "ISO 3166 code of the jurisdiction (§5).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/jurisdiction_code"
+        },
+        "name": {
+          "description": "Name of the jurisdiction (§5).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "code",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "authorities": {
+      "description": "Authorities whose rules the profile reads. Profiles belong to the authorities (§5; §13).",
+      "x-ctres-req": "M",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Name of the authority (§5).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/text"
+          },
+          "role": {
+            "description": "Role of the authority (§5).",
+            "x-ctres-req": "M",
+            "type": "string",
+            "enum": [
+              "gambling_regulator",
+              "financial_intelligence_unit",
+              "tax_authority",
+              "central_bank",
+              "other"
+            ]
+          },
+          "url": {
+            "description": "Web address of the authority (§5).",
+            "x-ctres-req": "O",
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?://"
+          }
+        },
+        "required": [
+          "name",
+          "role"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "status": {
+      "description": "indicative until the authority concerned has reviewed the profile; confirmed once it has (§5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "indicative",
+        "confirmed"
+      ]
+    },
+    "confirmed_by": {
+      "description": "Authority that reviewed and confirmed the profile (§5).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is confirmed (§5).",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "confirmed_at": {
+      "description": "Date of confirmation (§5).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is confirmed (§5).",
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "effective_from": {
+      "description": "Date from which this profile version applies (§5).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "effective_to": {
+      "description": "Date until which this profile version applies (§5).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "supersedes_version": {
+      "description": "Profile version this version replaces (§5).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "inherits_from": {
+      "description": "Base profile this profile inherits from; the profile then carries only the parameter blocks that override the base (§5).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where a federal or provincial system shares a base profile across licensing bodies (§5).",
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "description": "Identifier of the base profile (§5).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,8})*$"
+        },
+        "profile_version": {
+          "description": "Version of the base profile (§5).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/semver"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version"
+      ],
+      "additionalProperties": false
+    },
+    "market_status": {
+      "description": "Status of the online market. Where the market is closed to online gambling, the profile covers payment-side blocking only (§5).",
+      "x-ctres-req": "O",
+      "type": "string",
+      "enum": [
+        "licensed",
+        "state_monopoly",
+        "closed",
+        "opening"
+      ]
+    },
+    "indexed_units": {
+      "description": "Indexed units used by thresholds, with the value in force for each period (§3 Currency-aware; §5).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where any threshold or limit in the profile is set in indexed units (§3).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "unit_id": {
+            "description": "Identifier of the unit, cited by profile_amount.indexed_unit (§3).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "name": {
+            "description": "Name of the unit, for example a minimum wage or an inflation-indexed unit (§3; Annex E).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/text"
+          },
+          "currency": {
+            "description": "Currency in which the unit is valued (§3).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/currency_code"
+          },
+          "values": {
+            "description": "Values in force, by period (§3).",
+            "x-ctres-req": "M",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Money value of one unit (§3).",
+                  "x-ctres-req": "M",
+                  "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                },
+                "effective_from": {
+                  "description": "Date from which the value applies (§3).",
+                  "x-ctres-req": "M",
+                  "$ref": "common.schema.json#/$defs/date"
+                },
+                "effective_to": {
+                  "description": "Date until which the value applies (§3).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/date"
+                }
+              },
+              "required": [
+                "value",
+                "effective_from"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "unit_id",
+          "name",
+          "currency",
+          "values"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "parameters": {
+      "description": "Parameter blocks, one per row of the §5 parameter table. A profile contains parameters only and never adds fields to records (§5).",
+      "x-ctres-req": "M",
+      "type": "object",
+      "properties": {
+        "permitted_rails": {
+          "description": "Permitted rails and instrument types (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "rails": {
+              "description": "Status of each rail (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rail": {
+                    "description": "Rail (§5; §6).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/rail"
+                  },
+                  "status": {
+                    "description": "Whether the rail is permitted, prohibited, permitted with conditions, or not addressed by the rules (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "permitted",
+                      "prohibited",
+                      "conditional",
+                      "not_addressed"
+                    ]
+                  },
+                  "conditions": {
+                    "description": "Conditions attached to the rail (§5).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Where status is conditional (§5).",
+                    "$ref": "common.schema.json#/$defs/text"
+                  }
+                },
+                "required": [
+                  "rail",
+                  "status"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "status": {
+                          "const": "conditional"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "conditions"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "prohibited_funding_types": {
+              "description": "Funding types that may not be used, for example credit, invoice and bnpl where credit in any form is prohibited (§5; §4.2).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/funding_type"
+              }
+            },
+            "anonymous_instruments_prohibited": {
+              "description": "Whether anonymous instruments are prohibited (§5).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "approved_providers_only": {
+              "description": "Whether only payment providers notified to or approved by the authority may be used (§5; §4.10).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "holder_rules": {
+          "description": "Holder and ownership rules (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "instrument_in_player_name": {
+              "description": "Whether instruments must be in the player's name (§5).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "required",
+                "required_above_threshold",
+                "not_required"
+              ]
+            },
+            "ownership_confirmation_thresholds": {
+              "description": "Amounts above which ownership must be confirmed (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "applies_to": {
+                    "description": "Direction to which the threshold applies (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "deposit",
+                      "withdrawal"
+                    ]
+                  },
+                  "threshold": {
+                    "description": "Threshold amount (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/profile_amount"
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "applies_to",
+                  "threshold"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "accepted_verification_methods": {
+              "description": "Holder-verification methods the authority accepts as evidence (§5; §4.2; §15).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/holder_verification_method"
+              }
+            },
+            "national_id_match_required": {
+              "description": "Whether accounts must be held under the player's national identifier (§5; §4.2).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "third_party_payments": {
+              "description": "Treatment of payments to or from third parties (§5).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "prohibited",
+                "restricted",
+                "permitted"
+              ]
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "closed_loop": {
+          "description": "Closed loop and payout routing (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "requirement": {
+              "description": "Whether payouts must return to the funding instrument or holder (§5).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "required",
+                "where_possible",
+                "planned",
+                "not_required"
+              ]
+            },
+            "permitted_destination_rules": {
+              "description": "Destination rules a withdrawal may follow without an exception (§5; §4.4).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/destination_rule"
+              }
+            },
+            "payout_routes": {
+              "description": "Payout routes set by amount (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "amount_from": {
+                    "description": "Lower bound of the band, inclusive (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "#/$defs/profile_amount"
+                  },
+                  "amount_to": {
+                    "description": "Upper bound of the band, inclusive (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "#/$defs/profile_amount"
+                  },
+                  "rails": {
+                    "description": "Rails permitted for payouts in the band (§5).",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/rail"
+                    }
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "rails"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "same_asset_required": {
+              "description": "Whether virtual-asset payouts must be in the asset deposited (§5; §6).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "check_thresholds": {
+          "description": "Check thresholds and aggregation windows (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "thresholds": {
+              "description": "Thresholds at which checks apply (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "check_types": {
+                    "description": "Check types the threshold triggers (§5; §4.5).",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/check_type"
+                    }
+                  },
+                  "purpose": {
+                    "description": "Purpose of the check, in words, for example customer due diligence (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "applies_to": {
+                    "description": "Flows the threshold measures (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "deposits",
+                      "withdrawals",
+                      "deposits_and_withdrawals",
+                      "net_deposits",
+                      "stakes",
+                      "winnings",
+                      "transactions"
+                    ]
+                  },
+                  "threshold": {
+                    "description": "Threshold amount (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/profile_amount"
+                  },
+                  "aggregation": {
+                    "description": "Aggregation window (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/aggregation_window"
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "check_types",
+                  "applies_to",
+                  "threshold",
+                  "aggregation"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "report_triggers": {
+          "description": "Report triggers and deadlines (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "triggers": {
+              "description": "Reports the profile requires, with their triggers and deadlines (§5; §4.12).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "report_type": {
+                    "description": "Type of report (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/report_type"
+                  },
+                  "destination_authority": {
+                    "description": "Authority that receives the report (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "channel": {
+                    "description": "Channel used (§5; §4.12).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/reporting_channel"
+                  },
+                  "threshold": {
+                    "description": "Threshold amount (§5).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "For threshold-based reports (§5).",
+                    "$ref": "#/$defs/profile_amount"
+                  },
+                  "aggregation": {
+                    "description": "Aggregation window (§5).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Where threshold is given (§5).",
+                    "$ref": "#/$defs/aggregation_window"
+                  },
+                  "deadline": {
+                    "description": "Deadline for filing (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/deadline"
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "report_type",
+                  "destination_authority",
+                  "deadline"
+                ],
+                "additionalProperties": false,
+                "dependentRequired": {
+                  "threshold": [
+                    "aggregation"
+                  ]
+                }
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "payout_time_limits": {
+          "description": "Payout time limits (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "limits": {
+              "description": "Time limits for paying out (§5; §4.4).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "deadline": {
+                    "description": "Time allowed (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/deadline"
+                  },
+                  "rails": {
+                    "description": "Rails to which the limit applies; all rails where omitted (§5).",
+                    "x-ctres-req": "O",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/rail"
+                    }
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "deadline"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "taxes_at_payment": {
+          "description": "Taxes at the point of payment (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "taxes": {
+              "description": "Taxes levied or withheld at payment (§5; §4.3 tax_lines).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "tax_type": {
+                    "description": "Kind of tax, as used in tax_lines.type (§5; §4.3).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/snake_code"
+                  },
+                  "applies_to": {
+                    "description": "What the tax is levied on (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "deposit",
+                      "withdrawal",
+                      "stake",
+                      "winnings",
+                      "net_winnings"
+                    ]
+                  },
+                  "rate": {
+                    "description": "Rate as a decimal fraction (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                  },
+                  "product": {
+                    "description": "Product to which the rate applies, where rates differ by product (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "authority": {
+                    "description": "Authority to which the tax is due (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "remittance_deadline": {
+                    "description": "Deadline for remittance (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "#/$defs/deadline"
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "tax_type",
+                  "applies_to",
+                  "rate",
+                  "authority"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "player_funds_protection": {
+          "description": "Player-funds protection and coverage (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "permitted_mechanisms": {
+              "description": "Protection mechanisms the profile accepts (§5; §4.1).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/protection_mechanism"
+              }
+            },
+            "coverage": {
+              "description": "Coverage requirement (§5; §4.7).",
+              "x-ctres-req": "O",
+              "type": "object",
+              "properties": {
+                "minimum_ratio": {
+                  "description": "Minimum ratio of funds held to player liabilities, as a decimal fraction (§5).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                },
+                "minimum_in_account_ratio": {
+                  "description": "Minimum share of liabilities that must be held in the protected account itself, as a decimal fraction (§5).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                },
+                "liabilities_include": {
+                  "description": "Items counted as player liabilities (§5; §4.7).",
+                  "x-ctres-req": "O",
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "player_balances",
+                      "pending_withdrawals",
+                      "open_bets"
+                    ]
+                  }
+                },
+                "funds_in_transit_counted": {
+                  "description": "Whether funds in transit count towards coverage (§5).",
+                  "x-ctres-req": "O",
+                  "type": "boolean"
+                },
+                "cure_deadline": {
+                  "description": "Time allowed to cure a shortfall (§5).",
+                  "x-ctres-req": "O",
+                  "$ref": "#/$defs/deadline"
+                },
+                "statement_frequency": {
+                  "description": "Frequency of coverage statements (§5; §4.7).",
+                  "x-ctres-req": "O",
+                  "type": "string",
+                  "enum": [
+                    "daily",
+                    "weekly",
+                    "monthly",
+                    "quarterly"
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            "guarantees": {
+              "description": "Guarantees, bonds or reserves required (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "purpose": {
+                    "description": "What the guarantee secures (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "amount": {
+                    "description": "Amount required (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/profile_amount"
+                  }
+                },
+                "required": [
+                  "amount"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "submission": {
+          "description": "Submission mode and cadence (§5; §8.1).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "modes": {
+              "description": "Submission modes the profile uses (§8.1).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "description": "Submission mode (§8.1).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "continuous",
+                      "periodic_package",
+                      "on_demand",
+                      "incident"
+                    ]
+                  },
+                  "cadence": {
+                    "description": "Cadence (§5; §8.1).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Where mode is continuous or periodic_package (§8.1).",
+                    "type": "string",
+                    "enum": [
+                      "real_time",
+                      "hourly",
+                      "daily",
+                      "weekly",
+                      "monthly",
+                      "quarterly",
+                      "semi_annual",
+                      "annual"
+                    ]
+                  },
+                  "deadline": {
+                    "description": "Deadline for the submission or response (§8.1).",
+                    "x-ctres-req": "O",
+                    "$ref": "#/$defs/deadline"
+                  },
+                  "record_types": {
+                    "description": "Record types included (§8.1).",
+                    "x-ctres-req": "O",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "R1",
+                        "R2",
+                        "R3",
+                        "R4",
+                        "R5",
+                        "R6",
+                        "R7",
+                        "R8",
+                        "R9",
+                        "R10",
+                        "R11",
+                        "R12"
+                      ]
+                    }
+                  },
+                  "transaction_extract": {
+                    "description": "Whether R2 to R6 are submitted as a full extract or a sample (§8.1).",
+                    "x-ctres-req": "O",
+                    "type": "string",
+                    "enum": [
+                      "full",
+                      "sample"
+                    ]
+                  },
+                  "channel": {
+                    "description": "The authority's existing channel (§8.3).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/text"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "mode": {
+                          "enum": [
+                            "continuous",
+                            "periodic_package"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "mode"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "cadence"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "manifest_signature_required": {
+              "description": "Whether the manifest must be signed with the operator's certificate (§8.2).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "formats": {
+              "description": "File formats accepted (§8.2).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "jsonl",
+                  "csv"
+                ]
+              }
+            },
+            "report_references_in_packages": {
+              "description": "Whether R12 appears in periodic packages in full, as counts only, or not at all (§4.12; §15).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "full",
+                "counts_only",
+                "none"
+              ]
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "cross_operator_limits": {
+          "description": "Cross-operator limits and registers (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "limits": {
+              "description": "Limits enforced across operators through a register (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "register": {
+                    "description": "Register or limit file queried (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "applies_to": {
+                    "description": "What the limit caps (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "deposits",
+                      "stakes",
+                      "losses",
+                      "spending"
+                    ]
+                  },
+                  "limit": {
+                    "description": "Limit amount (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/profile_amount"
+                  },
+                  "aggregation": {
+                    "description": "Window of the limit (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "#/$defs/aggregation_window"
+                  },
+                  "query_before": {
+                    "description": "Event before which the register must be queried (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "each_deposit",
+                      "each_stake",
+                      "account_opening",
+                      "limit_change"
+                    ]
+                  },
+                  "raise_condition": {
+                    "description": "Condition for raising the limit, for example a credit-register check (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/text"
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "register",
+                  "applies_to",
+                  "limit",
+                  "aggregation",
+                  "query_before"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "eligibility_screening": {
+          "description": "Eligibility screening at payment (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "registers": {
+              "description": "Registers screened before money moves (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule_id": {
+                    "description": "Identifier of the rule within the profile, unique in the profile; records cite it as <profile_id>@<profile_version>#<rule_id> (§5; §4.12).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "register": {
+                    "description": "Register screened (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "check_type": {
+                    "description": "Check type recorded in R5 (§5; §4.5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/check_type"
+                  },
+                  "population": {
+                    "description": "Groups the register covers, as snake_case codes, for example self_excluded, insolvent, benefit_recipients or debtors (§5).",
+                    "x-ctres-req": "O",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/snake_code"
+                    }
+                  },
+                  "timing": {
+                    "description": "When the register must be screened (§5).",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "account_opening",
+                        "each_login",
+                        "each_deposit",
+                        "each_stake",
+                        "each_payout"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "rule_id",
+                  "register",
+                  "check_type",
+                  "timing"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "minimum_age": {
+              "description": "Minimum age to play (§5).",
+              "x-ctres-req": "O",
+              "type": "integer",
+              "minimum": 16,
+              "maximum": 30
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "mandatory_hubs": {
+          "description": "Mandatory hubs and gateways (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "hubs": {
+              "description": "State registers or gateways through which payments or bets must pass (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "hub_id": {
+                    "description": "Identifier of the hub within the profile (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "name": {
+                    "description": "Name of the hub (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "routes": {
+                    "description": "What must pass through the hub (§5).",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "payments",
+                        "bets",
+                        "player_registrations"
+                      ]
+                    }
+                  },
+                  "issues_transaction_identifier": {
+                    "description": "Whether the hub issues an identifier per transaction, carried in authority_reference on R3 and R4 (§5; §4.3).",
+                    "x-ctres-req": "M",
+                    "type": "boolean"
+                  },
+                  "status": {
+                    "description": "Status of the hub (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "live",
+                      "pilot",
+                      "planned"
+                    ]
+                  }
+                },
+                "required": [
+                  "hub_id",
+                  "name",
+                  "routes",
+                  "issues_transaction_identifier",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "instrument_origin": {
+          "description": "Instrument origin and currency (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "domestic_instruments_only": {
+              "description": "Whether only domestic banks or cards may be used (§5).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "permitted_issuer_countries": {
+              "description": "Countries whose institutions may issue instruments (§5; §4.2 issuer_country).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/country_code"
+              }
+            },
+            "settlement_currencies": {
+              "description": "Currencies in which payments may settle (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/currency_code"
+              }
+            },
+            "nominated_accounts_per_player": {
+              "description": "Maximum number of nominated accounts per player (§5).",
+              "x-ctres-req": "O",
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "withdrawal_conditions": {
+          "description": "Withdrawal conditions (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "min_wagering_share_before_withdrawal": {
+              "description": "Share of deposits that must be wagered before a withdrawal, as a decimal fraction (§5).",
+              "x-ctres-req": "O",
+              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+            },
+            "max_withdrawals_per_day": {
+              "description": "Maximum number of withdrawals per day (§5).",
+              "x-ctres-req": "O",
+              "type": "integer",
+              "minimum": 1
+            },
+            "winnings_only": {
+              "description": "Whether only winnings may be withdrawn (§5).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "dormant_balance_return_after": {
+              "description": "Period after which dormant balances are returned (§5).",
+              "x-ctres-req": "O",
+              "$ref": "common.schema.json#/$defs/duration"
+            },
+            "cash_payout_at_venue": {
+              "description": "Whether online winnings may be paid in cash at a venue (§5).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "other_conditions": {
+              "description": "Other withdrawal conditions (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "description": "Code of the condition (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/snake_code"
+                  },
+                  "description": {
+                    "description": "The condition, in words (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  }
+                },
+                "required": [
+                  "code",
+                  "description"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "payment_blocking": {
+          "description": "Payment-blocking lists (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "lists": {
+              "description": "Lists that bind payment providers or others (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "list_id": {
+                    "description": "Identifier of the list within the profile (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/identifier"
+                  },
+                  "name": {
+                    "description": "Name of the list (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/text"
+                  },
+                  "binds": {
+                    "description": "Who the list binds (§5).",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "payment_providers",
+                        "banks",
+                        "internet_providers",
+                        "app_stores"
+                      ]
+                    }
+                  },
+                  "scope": {
+                    "description": "What the list blocks: by operator or domain, by bank account, by merchant category, or a whole category of games (§5).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "operator_or_domain",
+                      "bank_account",
+                      "merchant_category",
+                      "game_category"
+                    ]
+                  },
+                  "action_deadline": {
+                    "description": "Time allowed to act on a listing (§5).",
+                    "x-ctres-req": "O",
+                    "$ref": "#/$defs/deadline"
+                  }
+                },
+                "required": [
+                  "list_id",
+                  "name",
+                  "binds",
+                  "scope"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "data_vault": {
+          "description": "Data vault and integrity (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "required": {
+              "description": "Whether a data vault or central system is required (§5).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "model": {
+              "description": "Kind of arrangement: an operator-hosted vault, the authority's central system, or a national data-exchange layer (§5).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "operator_hosted_vault",
+                "authority_central_system",
+                "data_exchange_layer"
+              ]
+            },
+            "schema_name": {
+              "description": "Name of the authority's schema (§5; §7).",
+              "x-ctres-req": "O",
+              "$ref": "common.schema.json#/$defs/text"
+            },
+            "format": {
+              "description": "Data format (§5; §7).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "xml",
+                "json",
+                "other"
+              ]
+            },
+            "feed": {
+              "description": "Feed frequency (§5).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "real_time",
+                "near_real_time",
+                "daily",
+                "monthly"
+              ]
+            },
+            "sealing": {
+              "description": "How the vault is sealed, for example daily with an authority-issued token (§5).",
+              "x-ctres-req": "O",
+              "$ref": "common.schema.json#/$defs/text"
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "data_location": {
+          "description": "Data location (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "permitted_locations": {
+              "description": "Where data must be held: ISO 3166-1 alpha-2 country codes, or a named area such as EEA (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z]{2,4}$"
+              }
+            },
+            "applies_to": {
+              "description": "Data categories to which the rule applies, as snake_case codes, for example all_data or payment_data (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "common.schema.json#/$defs/snake_code"
+              }
+            },
+            "effective_from": {
+              "description": "Date from which the rule applies (§5).",
+              "x-ctres-req": "O",
+              "$ref": "common.schema.json#/$defs/date"
+            }
+          },
+          "unevaluatedProperties": false
+        },
+        "retention": {
+          "description": "Retention (§5; §12).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "periods": {
+              "description": "Retention periods by record category (§5).",
+              "x-ctres-req": "O",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "record_category": {
+                    "description": "Record category, as a snake_case code, for example all_records, aml_records, gaming_data or account_records (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/snake_code"
+                  },
+                  "period": {
+                    "description": "Retention period (§5).",
+                    "x-ctres-req": "M",
+                    "$ref": "common.schema.json#/$defs/duration"
+                  },
+                  "starts_at": {
+                    "description": "Event from which the period runs (§5).",
+                    "x-ctres-req": "O",
+                    "type": "string",
+                    "enum": [
+                      "transaction",
+                      "end_of_relationship",
+                      "account_closure",
+                      "end_of_year"
+                    ]
+                  },
+                  "tied_to_tax_limitation_period": {
+                    "description": "Whether the period is extended to the tax limitation period where longer (§5).",
+                    "x-ctres-req": "O",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "record_category",
+                  "period"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "unevaluatedProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "description": "Principal published sources (Annex B).",
+      "x-ctres-req": "O",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.schema.json#/$defs/text"
+      }
+    },
+    "notes": {
+      "description": "Notes on the profile (§5).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/text"
+    }
+  },
+  "required": [
+    "ctres_version",
+    "profile_id",
+    "profile_version",
+    "title",
+    "jurisdiction",
+    "authorities",
+    "status",
+    "effective_from",
+    "parameters"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "confirmed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "confirmed_by",
+          "confirmed_at"
+        ]
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "required": [
+            "inherits_from"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "required": [
+              "permitted_rails",
+              "holder_rules",
+              "closed_loop",
+              "check_thresholds",
+              "report_triggers",
+              "payout_time_limits",
+              "taxes_at_payment",
+              "player_funds_protection",
+              "submission",
+              "cross_operator_limits",
+              "eligibility_screening",
+              "mandatory_hubs",
+              "instrument_origin",
+              "withdrawal_conditions",
+              "payment_blocking",
+              "data_vault",
+              "data_location",
+              "retention"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "profile_amount": {
+      "description": "A threshold or limit in a currency, or in an indexed unit whose money value is recorded in indexed_units and applied with the value in force on the transaction date (§3 Currency-aware; §5).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "description": "Amount (§5).",
+              "x-ctres-req": "M",
+              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+            },
+            "currency": {
+              "description": "ISO 4217 currency of the amount (§5).",
+              "x-ctres-req": "M",
+              "$ref": "common.schema.json#/$defs/currency_code"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "units": {
+              "description": "Number of indexed units (§5).",
+              "x-ctres-req": "M",
+              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+            },
+            "indexed_unit": {
+              "description": "The unit_id of an entry in indexed_units (§5; §3).",
+              "x-ctres-req": "M",
+              "$ref": "common.schema.json#/$defs/identifier"
+            }
+          },
+          "required": [
+            "units",
+            "indexed_unit"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "aggregation_window": {
+      "description": "Window over which amounts are aggregated before a threshold or limit applies (§5 Check thresholds and aggregation windows).",
+      "type": "object",
+      "properties": {
+        "window_type": {
+          "description": "Kind of window: a single transaction, a rolling or fixed window of the stated length, a gaming day, a calendar day, week or month, or the lifetime of the account (§5).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "enum": [
+            "single_transaction",
+            "rolling",
+            "fixed",
+            "gaming_day",
+            "calendar_day",
+            "calendar_week",
+            "calendar_month",
+            "lifetime"
+          ]
+        },
+        "length": {
+          "description": "Length of the window (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Where window_type is rolling or fixed (§5).",
+          "$ref": "common.schema.json#/$defs/duration"
+        },
+        "linked_transactions": {
+          "description": "Whether linked transactions are aggregated, as in 'single or linked' (§5).",
+          "x-ctres-req": "O",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "window_type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "window_type": {
+                "enum": [
+                  "rolling",
+                  "fixed"
+                ]
+              }
+            },
+            "required": [
+              "window_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "length"
+            ]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "deadline": {
+      "description": "A deadline: a duration from the event that starts the clock, or a day of the following month (§5).",
+      "type": "object",
+      "properties": {
+        "duration": {
+          "description": "Time allowed, as an ISO 8601 duration (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Unless day_of_following_month is given (§5).",
+          "$ref": "common.schema.json#/$defs/duration"
+        },
+        "day_basis": {
+          "description": "Whether days are calendar days or business days (§5). Defaults to calendar.",
+          "x-ctres-req": "O",
+          "type": "string",
+          "enum": [
+            "calendar",
+            "business"
+          ],
+          "default": "calendar"
+        },
+        "day_of_following_month": {
+          "description": "Day of the month following the event or period by which the action is due (§5).",
+          "x-ctres-req": "C",
+          "x-ctres-condition": "Unless duration is given (§5).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        },
+        "clock_starts_at": {
+          "description": "Event that starts the clock, as a snake_case code, for example transaction, detection, request, verification or period_end (§5).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/snake_code"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "duration"
+          ]
+        },
+        {
+          "required": [
+            "day_of_following_month"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "parameter_block": {
+      "description": "Properties common to every parameter block (§5; Annex B): the state of the reading, its sources and a note.",
+      "type": "object",
+      "properties": {
+        "reading": {
+          "description": "State of the reading: stated in published sources; not_found (no published rule was located, which does not mean none exists); to_be_confirmed (the sources did not settle it); not_applicable (Annex B).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "enum": [
+            "stated",
+            "not_found",
+            "to_be_confirmed",
+            "not_applicable"
+          ]
+        },
+        "sources": {
+          "description": "Published sources for the reading (Annex B).",
+          "x-ctres-req": "O",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "common.schema.json#/$defs/text"
+          }
+        },
+        "note": {
+          "description": "Note on the reading (Annex B).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/text"
+        }
+      },
+      "required": [
+        "reading"
+      ]
+    }
+  }
+}

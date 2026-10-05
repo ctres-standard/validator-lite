@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r04_withdrawal.schema.json",
+  "title": "CTRES v1.0 R4 Withdrawal",
+  "description": "What went out, to which instrument, who released it, and how quickly (§4.4). The fields are defined in payment.schema.json, shared with R3; this schema fixes direction to withdrawal, which makes requested_at, paid_at, destination_rule, approved_by and approved_at mandatory.",
+  "allOf": [
+    {
+      "$ref": "../payment.schema.json"
+    },
+    {
+      "properties": {
+        "direction": {
+          "const": "withdrawal"
+        }
+      },
+      "required": [
+        "direction",
+        "requested_at",
+        "paid_at",
+        "destination_rule",
+        "approved_by",
+        "approved_at"
+      ]
+    }
+  ]
+}

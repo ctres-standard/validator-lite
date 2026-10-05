@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/manifest.schema.json",
+  "title": "CTRES v1.0 package manifest",
+  "description": "manifest.json, carried by every package (§8.2). The SHA-256 of manifest.json is the package fingerprint: a receipt that quotes it proves which package was submitted. The manifest may be signed with the operator's certificate where the profile requires.",
+  "type": "object",
+  "properties": {
+    "standard": {
+      "description": "Name of the Standard (§8.2).",
+      "x-ctres-req": "M",
+      "const": "CTRES"
+    },
+    "standard_version": {
+      "description": "Version of the Standard and of this schema family the package conforms to (§13 Versioning).",
+      "x-ctres-req": "M",
+      "const": "1.0"
+    },
+    "package_id": {
+      "description": "Identifier of the package; a correction supersedes a package by this identifier (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "licence_number": {
+      "description": "Licence the package reports under (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/identifier"
+    },
+    "licensing_authority": {
+      "description": "Authority that issued the licence (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "licensee": {
+      "description": "Legal name of the licence holder (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "profile_id": {
+      "description": "Identifier of the jurisdiction profile applied (§8.2; §5).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,8})*$"
+    },
+    "profile_version": {
+      "description": "Version of the jurisdiction profile applied (§8.2; §5).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/semver"
+    },
+    "period_start": {
+      "description": "Start of the period covered (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the period covered (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/datetime"
+    },
+    "submission_mode": {
+      "description": "Submission mode of the package (§8.1).",
+      "x-ctres-req": "O",
+      "type": "string",
+      "enum": [
+        "continuous",
+        "periodic_package",
+        "on_demand",
+        "incident"
+      ]
+    },
+    "reporting_currency": {
+      "description": "Reporting currency of all *_reporting_ccy amounts in the package (§3 Currency-aware).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the package contains records with reporting-currency amounts (R3, R4, R7, R8) (§3). Enforced by this schema where files lists an R3 or R4 file, since every R3 and R4 record carries amount_reporting_ccy (§4.3).",
+      "$ref": "common.schema.json#/$defs/currency_code"
+    },
+    "conformance_level_declared": {
+      "description": "Conformance level declared in the conformance statement (§10; Annex D).",
+      "x-ctres-req": "O",
+      "type": "string",
+      "enum": [
+        "level_1",
+        "level_2",
+        "level_3"
+      ]
+    },
+    "records_start_date": {
+      "description": "Date from which complete records exist; earlier periods are reported as not_recorded (Annex D).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/date"
+    },
+    "files": {
+      "description": "One entry per data file: record type, record count and SHA-256 (§8.2).",
+      "x-ctres-req": "M",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "description": "File name within the package (§8.2).",
+            "x-ctres-req": "M",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.(jsonl|csv)$"
+          },
+          "record_type": {
+            "description": "The single record type the file holds (§4; §8.2).",
+            "x-ctres-req": "M",
+            "type": "string",
+            "enum": [
+              "R1",
+              "R2",
+              "R3",
+              "R4",
+              "R5",
+              "R6",
+              "R7",
+              "R8",
+              "R9",
+              "R10",
+              "R11",
+              "R12"
+            ]
+          },
+          "record_count": {
+            "description": "Number of records in the file (§8.2).",
+            "x-ctres-req": "M",
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "description": "SHA-256 of the file's bytes (§8.2).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/sha256"
+          },
+          "format": {
+            "description": "File format: JSON Lines, or CSV with identical field names at Level 1 (§8.2). Defaults to jsonl. The file name ends in .jsonl or .csv to match.",
+            "x-ctres-req": "O",
+            "type": "string",
+            "enum": [
+              "jsonl",
+              "csv"
+            ],
+            "default": "jsonl"
+          }
+        },
+        "required": [
+          "file",
+          "record_type",
+          "record_count",
+          "sha256"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "format": {
+                  "const": "csv"
+                }
+              },
+              "required": [
+                "format"
+              ]
+            },
+            "then": {
+              "properties": {
+                "file": {
+                  "pattern": "\\.csv$"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "file": {
+                  "pattern": "\\.jsonl$"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "generating_software": {
+      "description": "Name of the software that generated the package (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "generating_software_version": {
+      "description": "Version of the generating software (§8.2).",
+      "x-ctres-req": "M",
+      "$ref": "common.schema.json#/$defs/text"
+    },
+    "generated_at": {
+      "description": "When the package was generated (§8.2). Omit where byte-for-byte reproducibility of the manifest is required (§3 Deterministic and verifiable).",
+      "x-ctres-req": "O",
+      "$ref": "common.schema.json#/$defs/datetime"
+    },
+    "supersedes": {
+      "description": "The earlier package this one corrects, by identifier and reason (§8.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the package is a correction of an earlier package (§8.2).",
+      "type": "object",
+      "properties": {
+        "package_id": {
+          "description": "Identifier of the package being superseded (§8.2).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "reason": {
+          "description": "Reason for the correction (§8.2).",
+          "x-ctres-req": "M",
+          "$ref": "common.schema.json#/$defs/text"
+        },
+        "manifest_sha256": {
+          "description": "Fingerprint of the superseded package: the SHA-256 of its manifest.json (§8.2).",
+          "x-ctres-req": "O",
+          "$ref": "common.schema.json#/$defs/sha256"
+        }
+      },
+      "required": [
+        "package_id",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "signature_file": {
+      "description": "Name of the detached signature over manifest.json made with the operator's certificate (§8.2). The signature file is not listed in files.",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile requires the manifest to be signed (§8.2).",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "report_reference_counts": {
+      "description": "Counts and timeliness of R12 report references, carried instead of R12 records (§4.12).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where confidentiality rules keep R12 out of periodic packages (§4.12).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "report_type": {
+            "description": "Type of report (§4.12).",
+            "x-ctres-req": "M",
+            "$ref": "common.schema.json#/$defs/report_type"
+          },
+          "total": {
+            "description": "Number of reports of this type in the period (§4.12).",
+            "x-ctres-req": "M",
+            "type": "integer",
+            "minimum": 0
+          },
+          "filed_by_deadline": {
+            "description": "Number filed by their deadline (§4.12).",
+            "x-ctres-req": "M",
+            "type": "integer",
+            "minimum": 0
+          },
+          "filed_after_deadline": {
+            "description": "Number filed after their deadline (§4.12).",
+            "x-ctres-req": "M",
+            "type": "integer",
+            "minimum": 0
+          },
+          "not_filed": {
+            "description": "Number not yet filed at period end (§4.12).",
+            "x-ctres-req": "M",
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "report_type",
+          "total",
+          "filed_by_deadline",
+          "filed_after_deadline",
+          "not_filed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "synthetic": {
+      "description": "True where the package contains synthetic data for demonstration or testing and describes no real operator (§3). Defaults to false.",
+      "x-ctres-req": "O",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "standard",
+    "standard_version",
+    "package_id",
+    "licence_number",
+    "licensing_authority",
+    "licensee",
+    "profile_id",
+    "profile_version",
+    "period_start",
+    "period_end",
+    "files",
+    "generating_software",
+    "generating_software_version"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "files": {
+            "contains": {
+              "properties": {
+                "record_type": {
+                  "enum": [
+                    "R3",
+                    "R4"
+                  ]
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            }
+          }
+        },
+        "required": [
+          "files"
+        ]
+      },
+      "then": {
+        "required": [
+          "reporting_currency"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

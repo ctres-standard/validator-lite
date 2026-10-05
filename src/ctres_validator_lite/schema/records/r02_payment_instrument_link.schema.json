@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.0/records/r02_payment_instrument_link.schema.json",
+  "title": "CTRES v1.0 R2 Payment Instrument Link",
+  "description": "The link between a player and a payment instrument: whose it is, how that was established, and whether payouts may go to it (§4.2). R2 is submitted as the full register at period end, including revoked links with their status.",
+  "type": "object",
+  "properties": {
+    "instrument_id": {
+      "description": "Stable, tokenised identifier of the instrument (§4.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "player_ref": {
+      "description": "Pseudonymous player reference (§4.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/player_ref"
+    },
+    "player_ref_scope": {
+      "description": "Brand or licence the player reference belongs to (§4.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/player_ref_scope"
+    },
+    "rail": {
+      "description": "Rail of the instrument; selects the rail module for instrument_detail (§4.2; §6).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/rail"
+    },
+    "instrument_detail": {
+      "description": "Rail-module fields (§6): masked card, masked account number, instant-payment key type, hashed phone number, wallet address. Its shape is selected by rail (§4.2).",
+      "x-ctres-req": "M",
+      "type": "object"
+    },
+    "funding_type": {
+      "description": "Funding type of the instrument; needed wherever credit in any form is prohibited (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where rail is card (§6 card identifiers include funding type), and wherever the profile prohibits credit in any form (§4.2; §5).",
+      "$ref": "../common.schema.json#/$defs/funding_type"
+    },
+    "issuer_country": {
+      "description": "Country of the institution that issued the instrument (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Wherever the profile permits only domestic instruments (§4.2; §5 Instrument origin and currency).",
+      "$ref": "../common.schema.json#/$defs/country_code"
+    },
+    "holder_match": {
+      "description": "Result of matching the instrument holder to the player (§4.2).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "match",
+        "partial",
+        "no_match",
+        "not_checked",
+        "not_available"
+      ]
+    },
+    "holder_verification_method": {
+      "description": "Method used to verify the holder (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where holder_match is match, partial or no_match, that is, where a check was performed (§4.2).",
+      "$ref": "../common.schema.json#/$defs/holder_verification_method"
+    },
+    "verified_at": {
+      "description": "When the holder was verified (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where holder_match is match, partial or no_match (§4.2).",
+      "$ref": "../common.schema.json#/$defs/datetime_or_not_recorded"
+    },
+    "verified_by": {
+      "description": "Who or what verified the holder (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where holder_match is match, partial or no_match (§4.2).",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "national_id_match": {
+      "description": "Result of matching the account to the player's national identifier (§4.2).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile requires accounts to be held under the player's national identifier (§4.2; §5 Holder and ownership rules).",
+      "type": "string",
+      "enum": [
+        "match",
+        "no_match",
+        "not_checked"
+      ]
+    },
+    "payout_status": {
+      "description": "Whether payouts may go to the instrument (§4.2).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "not_eligible",
+        "pending",
+        "active",
+        "revoked"
+      ]
+    }
+  },
+  "required": [
+    "instrument_id",
+    "player_ref",
+    "player_ref_scope",
+    "rail",
+    "instrument_detail",
+    "holder_match",
+    "payout_status"
+  ],
+  "allOf": [
+    {
+      "$ref": "../common.schema.json#/$defs/player_key"
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "card"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_card"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "bank_transfer"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_bank_transfer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "emoney"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_emoney"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "mobile_money"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_mobile_money"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "carrier_billing"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_mobile_money"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "voucher"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_voucher"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "cash"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_cash"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "virtual_asset"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "properties": {
+          "instrument_detail": {
+            "$ref": "../rail_modules.schema.json#/$defs/instrument_virtual_asset"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rail": {
+            "const": "card"
+          }
+        },
+        "required": [
+          "rail"
+        ]
+      },
+      "then": {
+        "required": [
+          "funding_type"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "holder_match": {
+            "enum": [
+              "match",
+              "partial",
+              "no_match"
+            ]
+          }
+        },
+        "required": [
+          "holder_match"
+        ]
+      },
+      "then": {
+        "required": [
+          "holder_verification_method",
+          "verified_at",
+          "verified_by"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}
