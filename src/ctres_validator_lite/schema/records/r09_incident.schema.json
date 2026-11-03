@@ -11,7 +11,7 @@
       "$ref": "../common.schema.json#/$defs/identifier"
     },
     "category": {
-      "description": "Incident category (§4.9). Generalised from the Curaçao edition list; other covers events a profile names that fit no listed category.",
+      "description": "Incident category (§4.9). Other covers events a profile names that fit no listed category.",
       "x-ctres-req": "M",
       "type": "string",
       "enum": [

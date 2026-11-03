@@ -91,7 +91,7 @@
       "type": "boolean"
     },
     "evidence_ref": {
-      "description": "Where the due-diligence file is kept (§4.10; Curaçao edition R10).",
+      "description": "Where the due-diligence file is kept (§4.10).",
       "x-ctres-req": "M",
       "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
     }

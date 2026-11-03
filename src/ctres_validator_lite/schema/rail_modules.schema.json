@@ -171,12 +171,12 @@
           "$ref": "common.schema.json#/$defs/identifier"
         },
         "unique_deposit_address": {
-          "description": "Whether the operator allocated this deposit address to this player alone, which makes attribution direct (§6; Curaçao edition R2).",
+          "description": "Whether the operator allocated this deposit address to this player alone, which makes attribution direct (§6).",
           "x-ctres-req": "O",
           "type": "boolean"
         },
         "link_source": {
-          "description": "How the link became known (§6; Curaçao edition R2).",
+          "description": "How the link became known (§6).",
           "x-ctres-req": "O",
           "type": "string",
           "enum": [
@@ -193,7 +193,7 @@
       "additionalProperties": false
     },
     "transaction_virtual_asset": {
-      "description": "Virtual-asset module: fields added to R3 and R4 where rail is virtual_asset (§6; Curaçao edition R3/R4).",
+      "description": "Virtual-asset module: fields added to R3 and R4 where rail is virtual_asset (§6).",
       "properties": {
         "chain": {
           "description": "Network on which the payment was made, as a snake_case code (§6; §8.2).",
@@ -300,7 +300,7 @@
       }
     },
     "location_virtual_asset": {
-      "description": "Virtual-asset module: fields added to R1 where location_type is crypto_wallet (§6: wallet temperature and key-control models carried forward from the Curaçao edition).",
+      "description": "Virtual-asset module: fields added to R1 where location_type is crypto_wallet (§6: wallet temperature and key-control models).",
       "properties": {
         "chain": {
           "description": "Network on which the wallet is held, as a snake_case code (§6).",
@@ -318,7 +318,7 @@
           ]
         },
         "key_control_model": {
-          "description": "How the keys are controlled (§6; Curaçao edition R1).",
+          "description": "How the keys are controlled (§6).",
           "x-ctres-req": "M",
           "type": "string",
           "enum": [
@@ -330,9 +330,9 @@
           ]
         },
         "approvers": {
-          "description": "Roles authorised to move funds from the wallet (§6; Curaçao edition R1).",
+          "description": "Roles authorised to move funds from the wallet (§6).",
           "x-ctres-req": "C",
-          "x-ctres-condition": "Where temperature is warm or cold (Curaçao edition R1).",
+          "x-ctres-condition": "Where temperature is warm or cold.",
           "type": "array",
           "items": {
             "$ref": "common.schema.json#/$defs/identifier"
@@ -370,10 +370,10 @@
       ]
     },
     "check_virtual_asset": {
-      "description": "Virtual-asset module: fields added to R5 where check_type is blockchain_analytics (§6; Curaçao edition R5).",
+      "description": "Virtual-asset module: fields added to R5 where check_type is blockchain_analytics (§6).",
       "properties": {
         "exposure_categories": {
-          "description": "Exposure categories reported by the analytics provider (§6; Curaçao edition R5).",
+          "description": "Exposure categories reported by the analytics provider (§6).",
           "x-ctres-req": "C",
           "x-ctres-condition": "Only where check_type is blockchain_analytics (§6).",
           "type": "array",

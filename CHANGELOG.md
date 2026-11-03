@@ -2,6 +2,10 @@
 
 Versions follow `MAJOR.MINOR.PATCH`, where `MAJOR.MINOR` is the version of the Standard implemented. See [CONTRIBUTING.md](CONTRIBUTING.md#versioning).
 
+## 1.0.1 — 3 November 2026
+
+- Bundled schema 1.0.1 (descriptions only). No change to the checks.
+
 ## 1.0.0 — 2026-10-05
 
 Draft for consultation. First release, implementing the Structural and Referential classes of §11 of CTRES v1.0, universal edition (2 October 2026).

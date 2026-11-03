@@ -112,7 +112,7 @@
       "$ref": "common.schema.json#/$defs/non_negative_decimal"
     },
     "credited_amount": {
-      "description": "Amount posted to the player account, in account_currency: positive for a credit, negative for a debit (§4.3; sign convention of the Curaçao edition).",
+      "description": "Amount posted to the player account, in account_currency: positive for a credit, negative for a debit (§4.3).",
       "x-ctres-req": "M",
       "$ref": "common.schema.json#/$defs/decimal"
     },
@@ -172,12 +172,12 @@
       ]
     },
     "location_id": {
-      "description": "The R1 funds location that received or sent the payment, where known (§4.1; generalises operator_wallet_id of the Curaçao edition).",
+      "description": "The R1 funds location that received or sent the payment, where known (§4.1).",
       "x-ctres-req": "O",
       "$ref": "common.schema.json#/$defs/identifier"
     },
     "attestation_ref": {
-      "description": "The R11 attestation that covers the payment (§4.11; Curaçao edition R3/R4).",
+      "description": "The R11 attestation that covers the payment (§4.11).",
       "x-ctres-req": "C",
       "x-ctres-condition": "Where the payment passed through a funds location whose custody_model is omnibus_at_provider (§4.7; §4.11).",
       "$ref": "common.schema.json#/$defs/identifier"

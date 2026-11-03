@@ -65,7 +65,7 @@ A package that passes validator-lite has passed the Structural and Referential c
 validator-lite requires Python 3.10 or later and the `jsonschema` package (4.18 or later). Install a tagged release from the repository:
 
 ```sh
-pip install "git+https://github.com/ctres-standard/validator-lite@v1.0.0"
+pip install "git+https://github.com/ctres-standard/validator-lite@v1.0.1"
 ```
 
 or, from a checkout:
@@ -104,7 +104,7 @@ The report states the package, the licence, the profile and the period, then the
 
 ```text
 fingerprint  SHA-256 7676849c47f14f7ef0e33931b330c5b7427374c481ccbd546a0d222e94956ea2
-schema       bundled copy, release 1.0.0
+schema       bundled copy, release 1.0.1
 synthetic    yes: the manifest declares that the package holds synthetic data
 
 Structural: 8 checks, 5 passed, 3 failed

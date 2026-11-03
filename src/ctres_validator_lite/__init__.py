@@ -5,10 +5,10 @@ Evidence Standard (CTRES) v1.0, universal edition. Profile conformance, complete
 reconciliation are outside this package; they belong to the CTRES conformance suite.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # Version of the ctres-standard/schema release vendored under schema/ (written by scripts/sync_schema.py).
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.0.1"
 
 # Version of the Standard this validator implements; manifest.json states it in standard_version.
 STANDARD_VERSION = "1.0"
