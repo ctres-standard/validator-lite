@@ -1,14 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/profile.schema.json",
-  "title": "CTRES v1.0 jurisdiction profile (structure)",
+  "$id": "https://ctres.org/schema/1.1/profile.schema.json",
+  "title": "CTRES v1.1 jurisdiction profile (structure)",
   "description": "Structure of a jurisdiction profile: a configuration that turns the neutral record model into one authority's rule set (§5). This schema defines structure only. It carries no profile content, and it does not define how a package is tested against a profile; that is the conformance suite, maintained separately (§11).",
   "type": "object",
   "properties": {
     "ctres_version": {
-      "description": "Version of the Standard whose record model the profile parameterises (§13 Versioning).",
+      "description": "Version of the Standard whose record model the profile parameterises (§13 Versioning). A profile that carries the revenue_and_levy block declares 1.1; a profile without it may declare 1.0.",
       "x-ctres-req": "M",
-      "const": "1.0"
+      "type": "string",
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
     },
     "profile_id": {
       "description": "Profile identifier: an ISO 3166 code, optionally with a subdivision or a base-profile suffix (§5).",
@@ -231,7 +235,7 @@
       }
     },
     "parameters": {
-      "description": "Parameter blocks, one per row of the §5 parameter table. A profile contains parameters only and never adds fields to records (§5).",
+      "description": "Parameter blocks, one per row of the §5 parameter table, and the optional revenue_and_levy block of v1.1 (§5 Revenue and levy). A profile contains parameters only and never adds fields to records (§5).",
       "x-ctres-req": "M",
       "type": "object",
       "properties": {
@@ -934,7 +938,9 @@
                         "R9",
                         "R10",
                         "R11",
-                        "R12"
+                        "R12",
+                        "R13",
+                        "R14"
                       ]
                     }
                   },
@@ -1007,6 +1013,17 @@
                 "full",
                 "counts_only",
                 "none"
+              ]
+            },
+            "minimum_conformance_level": {
+              "description": "Minimum conformance level a package must declare (§10; Annex D): level_1 Return, level_2 Evidence, level_3 Custody, level_4 Supervision. Any record type may be included at any level; the level fixes the minimum set of record types (§10). Where omitted, the authority accepts any level.",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "level_1",
+                "level_2",
+                "level_3",
+                "level_4"
               ]
             }
           },
@@ -1579,6 +1596,608 @@
             }
           },
           "unevaluatedProperties": false
+        },
+        "revenue_and_levy": {
+          "description": "Revenue and levy (§5 Revenue and levy): how the jurisdiction defines and collects the operator-level levy, so that an R13 Gaming Revenue Statement, and an R14 Venue Count where the levy is fixed per unit, can be computed under the profile rather than read. Five parameters, which a validator reads (levy_formula, recognition, period_and_filing, negative_periods, aggregation), and a notes block, which carries what the parameters do not express. The block carries structure only; the values are the authority's.",
+          "x-ctres-req": "O",
+          "allOf": [
+            {
+              "$ref": "#/$defs/parameter_block"
+            }
+          ],
+          "type": "object",
+          "properties": {
+            "levy_formula": {
+              "description": "Levy formula, per product line (§5 Revenue and levy): the base type, the R13 quantities that enter the base with their sign and any cap, and the rate, bands or fixed amount; for venue lines, the win formula per unit type. The validator computes the base of each R13 line as the signed sum of the quantities the formula names and applies the rate, bands or fixed amount; where the base is fixed per unit, it counts the unit rows of R14 (§11).",
+              "x-ctres-req": "M",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "applies_to": {
+                    "description": "The product lines the formula applies to, as carried by R13 product_line, or * for every product line (§5 Revenue and levy; §4.13). Where more than one formula applies to a line, the formula that names its jurisdiction_category or its product_line prevails over one that applies to *.",
+                    "x-ctres-req": "M",
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "$ref": "common.schema.json#/$defs/identifier"
+                    }
+                  },
+                  "jurisdiction_category": {
+                    "description": "The category of the profile's product taxonomy the formula applies to, as carried by R13 jurisdiction_category (§5 Revenue and levy; §4.13).",
+                    "x-ctres-req": "O",
+                    "$ref": "common.schema.json#/$defs/snake_code"
+                  },
+                  "base_type": {
+                    "description": "Base of the levy: ggr (gross gaming revenue), turnover (stakes), fixed_per_unit (an amount per machine, table, counter or venue, counted from the unit rows of R14), commission (rake and fees), fee_band (a fee by band of the base) or prize_pool (§5 Revenue and levy).",
+                    "x-ctres-req": "M",
+                    "type": "string",
+                    "enum": [
+                      "ggr",
+                      "turnover",
+                      "fixed_per_unit",
+                      "commission",
+                      "fee_band",
+                      "prize_pool"
+                    ]
+                  },
+                  "terms": {
+                    "description": "The R13 quantities that enter the base, each with its sign and any cap; the base of a line is their signed sum. Bonus, refund, chargeback, jackpot and tax treatments are terms of the formula, not separate switches (§5 Revenue and levy; §4.13).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Unless base_type is fixed_per_unit, where the base is the count of R14 unit rows (§5 Revenue and levy).",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "quantity": {
+                          "description": "The R13 quantity that enters the base (§5 Revenue and levy; §4.13).",
+                          "x-ctres-req": "M",
+                          "type": "string",
+                          "enum": [
+                            "stakes_cash",
+                            "stakes_bonus",
+                            "stakes_refunded",
+                            "winnings_cash",
+                            "winnings_bonus",
+                            "winnings_withholding_tax",
+                            "bonus_granted",
+                            "bonus_expired",
+                            "rake_and_fees",
+                            "jackpot_contributions",
+                            "jackpot_payouts",
+                            "network_due_to",
+                            "network_due_from",
+                            "open_liability_start",
+                            "open_liability_end"
+                          ]
+                        },
+                        "sign": {
+                          "description": "Whether the quantity is added to the base (+) or subtracted from it (-) (§5 Revenue and levy).",
+                          "x-ctres-req": "M",
+                          "type": "string",
+                          "enum": [
+                            "+",
+                            "-"
+                          ]
+                        },
+                        "cap": {
+                          "description": "Cap on the quantity: a share of another R13 quantity, or an amount per period (§5 Revenue and levy).",
+                          "x-ctres-req": "O",
+                          "type": "object",
+                          "properties": {
+                            "share_of": {
+                              "description": "The R13 quantity the share is taken of (§5 Revenue and levy; §4.13).",
+                              "x-ctres-req": "C",
+                              "x-ctres-condition": "Where share is given (§5 Revenue and levy).",
+                              "type": "string",
+                              "enum": [
+                                "stakes_cash",
+                                "stakes_bonus",
+                                "stakes_refunded",
+                                "winnings_cash",
+                                "winnings_bonus",
+                                "winnings_withholding_tax",
+                                "bonus_granted",
+                                "bonus_expired",
+                                "rake_and_fees",
+                                "jackpot_contributions",
+                                "jackpot_payouts",
+                                "network_due_to",
+                                "network_due_from",
+                                "open_liability_start",
+                                "open_liability_end"
+                              ]
+                            },
+                            "share": {
+                              "description": "Cap as a share of share_of, as a decimal fraction: 0.20 means 20% (§5 Revenue and levy).",
+                              "x-ctres-req": "C",
+                              "x-ctres-condition": "Unless amount is given (§5 Revenue and levy).",
+                              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                            },
+                            "amount": {
+                              "description": "Cap as an amount per period (§5 Revenue and levy).",
+                              "x-ctres-req": "C",
+                              "x-ctres-condition": "Unless share is given (§5 Revenue and levy).",
+                              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                            },
+                            "currency": {
+                              "description": "ISO 4217 currency of amount (§5 Revenue and levy).",
+                              "x-ctres-req": "C",
+                              "x-ctres-condition": "Where amount is given (§5 Revenue and levy).",
+                              "$ref": "common.schema.json#/$defs/currency_code"
+                            }
+                          },
+                          "oneOf": [
+                            {
+                              "required": [
+                                "share_of",
+                                "share"
+                              ]
+                            },
+                            {
+                              "required": [
+                                "amount",
+                                "currency"
+                              ]
+                            }
+                          ],
+                          "dependentRequired": {
+                            "share_of": [
+                              "share"
+                            ],
+                            "share": [
+                              "share_of"
+                            ],
+                            "amount": [
+                              "currency"
+                            ],
+                            "currency": [
+                              "amount"
+                            ]
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "quantity",
+                        "sign"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rate": {
+                    "description": "Rate applied to the base, as a decimal fraction: 0.15 means 15% (§5 Revenue and levy).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Unless bands or fixed_amount is given; exactly one of rate, bands and fixed_amount is present (§5 Revenue and levy).",
+                    "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                  },
+                  "bands": {
+                    "description": "Bands of the base where the rate steps with it or the levy is a fee by band: each band's upper bound, inclusive, with null for the top band, and its rate (§5 Revenue and levy).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Where base_type is fee_band, or where the rate steps with the base; exactly one of rate, bands and fixed_amount is present (§5 Revenue and levy).",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "up_to": {
+                          "description": "Upper bound of the band, inclusive, as a decimal string; null for the top band, which has no upper bound (§5 Revenue and levy).",
+                          "x-ctres-req": "M",
+                          "anyOf": [
+                            {
+                              "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "rate": {
+                          "description": "Rate within the band, as a decimal fraction: 0.15 means 15% (§5 Revenue and levy).",
+                          "x-ctres-req": "M",
+                          "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                        }
+                      },
+                      "required": [
+                        "up_to",
+                        "rate"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "fixed_amount": {
+                    "description": "Fixed amount per unit and period where base_type is fixed_per_unit (§5 Revenue and levy; §4.14).",
+                    "x-ctres-req": "C",
+                    "x-ctres-condition": "Where base_type is fixed_per_unit; exactly one of rate, bands and fixed_amount is present (§5 Revenue and levy).",
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "description": "Amount per unit and period (§5 Revenue and levy).",
+                        "x-ctres-req": "M",
+                        "$ref": "common.schema.json#/$defs/non_negative_decimal"
+                      },
+                      "currency": {
+                        "description": "ISO 4217 currency of amount (§5 Revenue and levy).",
+                        "x-ctres-req": "M",
+                        "$ref": "common.schema.json#/$defs/currency_code"
+                      },
+                      "per": {
+                        "description": "What the amount is charged per: a slot machine, a table, a counter or a venue (the unit types of R14), or a month of the period (§5 Revenue and levy; §4.14).",
+                        "x-ctres-req": "M",
+                        "type": "string",
+                        "enum": [
+                          "slot_machine",
+                          "table",
+                          "counter",
+                          "venue",
+                          "month"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "amount",
+                      "currency",
+                      "per"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "venue_win_formulas": {
+                    "description": "Win formula per unit type for venue lines, as R14 win_formula names it: table_drop_formula, slot_meter_formula, slot_drop_formula, or profile where the formula is stated in notes.land_based. A slot_machine row names a slot formula or profile, a table row table_drop_formula or profile, a counter or venue_total row any of the four (§5 Revenue and levy; §4.14).",
+                    "x-ctres-req": "O",
+                    "type": "object",
+                    "properties": {
+                      "slot_machine": {
+                        "description": "Formula for a slot machine's win (§5 Revenue and levy; §4.14 win_formula).",
+                        "x-ctres-req": "O",
+                        "type": "string",
+                        "enum": [
+                          "slot_meter_formula",
+                          "slot_drop_formula",
+                          "profile"
+                        ]
+                      },
+                      "table": {
+                        "description": "Formula for a table's win (§5 Revenue and levy; §4.14 win_formula).",
+                        "x-ctres-req": "O",
+                        "type": "string",
+                        "enum": [
+                          "table_drop_formula",
+                          "profile"
+                        ]
+                      },
+                      "counter": {
+                        "description": "Formula for a counter's win (§5 Revenue and levy; §4.14 win_formula).",
+                        "x-ctres-req": "O",
+                        "type": "string",
+                        "enum": [
+                          "table_drop_formula",
+                          "slot_meter_formula",
+                          "slot_drop_formula",
+                          "profile"
+                        ]
+                      },
+                      "venue_total": {
+                        "description": "Formula for the venue total (§5 Revenue and levy; §4.14 win_formula).",
+                        "x-ctres-req": "O",
+                        "type": "string",
+                        "enum": [
+                          "table_drop_formula",
+                          "slot_meter_formula",
+                          "slot_drop_formula",
+                          "profile"
+                        ]
+                      }
+                    },
+                    "minProperties": 1,
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "applies_to",
+                  "base_type"
+                ],
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "required": [
+                      "rate"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "bands"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "fixed_amount"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "base_type": {
+                          "const": "fixed_per_unit"
+                        }
+                      },
+                      "required": [
+                        "base_type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "fixed_amount"
+                      ]
+                    },
+                    "else": {
+                      "required": [
+                        "terms"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "base_type": {
+                          "const": "fee_band"
+                        }
+                      },
+                      "required": [
+                        "base_type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "bands"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "recognition": {
+              "description": "Recognition (§5 Revenue and levy): when a stake enters the base and when winnings leave it. R13 carries the pair as stakes_basis and winnings_basis (§4.13).",
+              "x-ctres-req": "M",
+              "type": "object",
+              "properties": {
+                "stakes_basis": {
+                  "description": "When a stake enters the base: when placed or accepted, when settled, when the cash is received, or by accrual when the result is known; as R13 stakes_basis (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "M",
+                  "type": "string",
+                  "enum": [
+                    "placed",
+                    "settled",
+                    "cash",
+                    "accrual_at_result"
+                  ]
+                },
+                "winnings_basis": {
+                  "description": "When winnings leave the base: when paid, when credited to the player account, or when payable; as R13 winnings_basis (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "M",
+                  "type": "string",
+                  "enum": [
+                    "paid",
+                    "credited",
+                    "payable"
+                  ]
+                }
+              },
+              "required": [
+                "stakes_basis",
+                "winnings_basis"
+              ],
+              "additionalProperties": false
+            },
+            "period_and_filing": {
+              "description": "Period and filing (§5 Revenue and levy): the period of the statement and its cut-off, when and to whom it is filed, the channel and form, and whose figure is the figure of record.",
+              "x-ctres-req": "M",
+              "type": "object",
+              "properties": {
+                "period": {
+                  "description": "Period of the statement: a gaming day, a week, a month, a quarter or a year (§5 Revenue and levy; §4.13 period_start).",
+                  "x-ctres-req": "M",
+                  "type": "string",
+                  "enum": [
+                    "gaming_day",
+                    "week",
+                    "month",
+                    "quarter",
+                    "year"
+                  ]
+                },
+                "cut_off": {
+                  "description": "Cut-off of the period, for example 00:00 local or 06:00 local, at which R13 period boundaries and R14 gaming days fall (§5 Revenue and levy; §4.14 gaming_day).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "due": {
+                  "description": "When the statement and the levy are due, for example the 15th of the following month (§5 Revenue and levy).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "collector": {
+                  "description": "Who receives the statement and collects the levy: the tax authority, the regulator, both, or another body (§5 Revenue and levy).",
+                  "x-ctres-req": "O",
+                  "type": "string",
+                  "enum": [
+                    "tax_authority",
+                    "regulator",
+                    "both",
+                    "other"
+                  ]
+                },
+                "channel": {
+                  "description": "Channel through which the statement is filed, for example a portal or a filing system (§5 Revenue and levy; §4.12).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "form": {
+                  "description": "Identity of the prescribed form or return (§5 Revenue and levy; §4.12).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "figure_of_record": {
+                  "description": "Whose figure is the figure of record: the operator's declaration, or the authority's own computation, which R13 then carries as authority_figure_ref (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "O",
+                  "type": "string",
+                  "enum": [
+                    "operator_declaration",
+                    "authority_computation"
+                  ]
+                }
+              },
+              "required": [
+                "period"
+              ],
+              "additionalProperties": false
+            },
+            "negative_periods": {
+              "description": "Negative periods (§5 Revenue and levy): treatment of a period in which winnings exceed stakes (§4.13 ggr_declared), and the scope within which the result is netted.",
+              "x-ctres-req": "O",
+              "type": "object",
+              "properties": {
+                "rule": {
+                  "description": "The loss carried forward against later periods, floored at zero, or neither (§5 Revenue and levy).",
+                  "x-ctres-req": "M",
+                  "type": "string",
+                  "enum": [
+                    "carry_forward",
+                    "floor_zero",
+                    "none"
+                  ]
+                },
+                "netting_scope": {
+                  "description": "Scope within which the rule applies: the line, the product class, or the licence (§5 Revenue and levy).",
+                  "x-ctres-req": "O",
+                  "type": "string",
+                  "enum": [
+                    "line",
+                    "product_class",
+                    "licence"
+                  ]
+                }
+              },
+              "required": [
+                "rule"
+              ],
+              "additionalProperties": false
+            },
+            "aggregation": {
+              "description": "Aggregation (§5 Revenue and levy): the axes along which R13 lines are split, and the jurisdiction's product taxonomy (§4.13).",
+              "x-ctres-req": "O",
+              "type": "object",
+              "properties": {
+                "axes": {
+                  "description": "Axes the authority requires: product line, the category of the product taxonomy, channel, venue, player location, currency, brand (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "M",
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "product_line",
+                      "jurisdiction_category",
+                      "channel",
+                      "venue",
+                      "player_location",
+                      "currency",
+                      "brand"
+                    ]
+                  }
+                },
+                "taxonomy": {
+                  "description": "The jurisdiction's product code list, versioned; R13 jurisdiction_category carries one of its codes (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "O",
+                  "type": "object",
+                  "properties": {
+                    "ref": {
+                      "description": "Name or reference of the taxonomy (§5 Revenue and levy).",
+                      "x-ctres-req": "M",
+                      "$ref": "common.schema.json#/$defs/text"
+                    },
+                    "version": {
+                      "description": "Version of the taxonomy (§5 Revenue and levy).",
+                      "x-ctres-req": "O",
+                      "$ref": "common.schema.json#/$defs/text"
+                    }
+                  },
+                  "required": [
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "axes"
+              ],
+              "additionalProperties": false
+            },
+            "notes": {
+              "description": "Notes (§5 Revenue and levy): free text, with its source, for what the parameters do not express.",
+              "x-ctres-req": "O",
+              "type": "object",
+              "properties": {
+                "stake_scope": {
+                  "description": "What counts as a stake: entry, participation and admission fees, chips bought rather than wagered, deposits deemed stakes (§5 Revenue and levy).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "bonus_treatment": {
+                  "description": "Treatment of bonus and promotional credits beyond the terms of the formula: face value, exclusion, deduction when credited or cashed, caps and their phase-out, expired credits (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "refunds_and_voids": {
+                  "description": "Treatment of returned and voided stakes, and the period in which a refund is recognised (§5 Revenue and levy; §4.13 stakes_refunded).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "chargebacks_and_bad_debts": {
+                  "description": "Treatment of chargebacks, uncollectible receivables and their caps, and markers and credit extended to players (§5 Revenue and levy; §4.14 drop_markers).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "jackpot_and_pool_contributions": {
+                  "description": "Treatment of progressive and pooled jackpots, pooled games shared across jurisdictions, and prize-pool guarantees and overlays (§5 Revenue and levy; §4.13).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "taxes_in_base": {
+                  "description": "Taxes inside or outside the base: winnings gross or net of a withholding tax, value-added or goods-and-services tax, the levy itself (§5 Revenue and levy; §4.13 winnings_withholding_tax).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "evidence_linkage": {
+                  "description": "Whether the authority expects per-transaction data behind the statement or aggregates only, which decides whether R13 reconciles to the transaction records line by line or by totals (§5 Revenue and levy; §11).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "land_based": {
+                  "description": "Count rules for venues: coupons and promotional chips in the drop, tips, shill play, expired tickets, the count frequency, and any formula the profile defines (§5 Revenue and levy; §4.14).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                },
+                "source": {
+                  "description": "Published sources of the revenue and levy reading (§5 Revenue and levy; Annex B).",
+                  "x-ctres-req": "O",
+                  "$ref": "common.schema.json#/$defs/text"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "levy_formula",
+            "recognition",
+            "period_and_filing"
+          ],
+          "unevaluatedProperties": false
         }
       },
       "additionalProperties": false
@@ -1659,6 +2278,27 @@
               "data_location",
               "retention"
             ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parameters": {
+            "required": [
+              "revenue_and_levy"
+            ]
+          }
+        },
+        "required": [
+          "parameters"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ctres_version": {
+            "const": "1.1"
           }
         }
       }

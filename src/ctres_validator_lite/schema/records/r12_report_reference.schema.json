@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r12_report_reference.schema.json",
-  "title": "CTRES v1.0 R12 Report Reference",
+  "$id": "https://ctres.org/schema/1.1/records/r12_report_reference.schema.json",
+  "title": "CTRES v1.1 R12 Report Reference",
   "description": "A link between CTRES records and reports filed with other authorities (§4.12). R12 never carries the content of a suspicious transaction report. Where tipping-off and confidentiality rules apply, R12 is held by the operator and disclosed only to an authority entitled by law to see it; periodic packages then carry counts and timeliness only (see manifest report_reference_counts).",
   "type": "object",
   "properties": {

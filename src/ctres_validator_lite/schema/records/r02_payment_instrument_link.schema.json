@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r02_payment_instrument_link.schema.json",
-  "title": "CTRES v1.0 R2 Payment Instrument Link",
+  "$id": "https://ctres.org/schema/1.1/records/r02_payment_instrument_link.schema.json",
+  "title": "CTRES v1.1 R2 Payment Instrument Link",
   "description": "The link between a player and a payment instrument: whose it is, how that was established, and whether payouts may go to it (§4.2). R2 is submitted as the full register at period end, including revoked links with their status.",
   "type": "object",
   "properties": {

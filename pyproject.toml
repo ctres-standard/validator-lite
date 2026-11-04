@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctres-validator-lite"
-version = "1.0.1"
-description = "Structural and Referential validation (§11) of CTRES v1.0 packages"
+version = "1.1.0"
+description = "Structural and Referential validation (§11) of CTRES v1.0 and v1.1 packages"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

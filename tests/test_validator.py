@@ -4,7 +4,9 @@ Run:  python -m unittest discover -s tests -v
 
 The demonstration packages under demo/ are the fixtures. Each check test copies demo/clean into a
 temporary directory, makes one change, reseals the manifest unless the change is to the seal
-itself, and asserts that exactly the expected check reports it.
+itself, and asserts that exactly the expected check reports it. demo/level1 and demo/level2 are the
+same data cut down to the record types of their conformance level (§10). tests/fixtures/clean_1_0
+is the clean package of release 1.0.1, unchanged, to show that a CTRES v1.0 package still passes.
 """
 import contextlib
 import hashlib
@@ -27,7 +29,16 @@ from ctres_validator_lite import RULES, SCHEMA_VERSION, validate  # noqa: E402
 from ctres_validator_lite.cli import main  # noqa: E402
 
 CLEAN, DEFECTS = ROOT / "demo" / "clean", ROOT / "demo" / "defects"
+LEVEL1, LEVEL2 = ROOT / "demo" / "level1", ROOT / "demo" / "level2"
+CLEAN_1_0 = ROOT / "tests" / "fixtures" / "clean_1_0"
 RULE_IDS = [r[0] for r in RULES]
+R13, R14 = "R13_gaming_revenue_statements.jsonl", "R14_venue_counts.jsonl"
+SPORTS, CASINO = "GRS-2026-11-XJ-DEMO-0001-SPORTS-ONLINE-EUR", "GRS-2026-11-XJ-DEMO-0001-CASINO-ONLINE-EUR"
+FLOOR = "GRS-2026-11-XJ-DEMO-0001-CASINO-FLOOR-V-DEMO-01-EUR"
+SLOT = "VC-2026-11-14-V-DEMO-01-SM-0001"
+# The advisory findings a level_2 package made of the clean data carries: references to record types the
+# level does not require, not resolved within the package (§10), one per field and check.
+LEVEL2_ADVISORY = {"REF-01": 1, "REF-02": 1, "REF-03": 2, "REF-05": 1, "REF-06": 1, "REF-08": 1, "REF-11": 2, "REF-12": 1}
 
 
 def sha256(data):
@@ -93,10 +104,36 @@ class PackageCase(unittest.TestCase):
     def record(self, records, key, value):
         return next(r for r in records if r.get(key) == value)
 
+    def set_level(self, level):
+        """Declare a conformance level in the manifest, or none."""
+        m = self.manifest()
+        if level is None:
+            m.pop("conformance_level_declared", None)
+        else:
+            m["conformance_level_declared"] = level
+        self.write_manifest(m)
+
+    def remove(self, *rtypes):
+        """Take record types out of the package: their files and their manifest entries."""
+        m = self.manifest()
+        for f in m["files"]:
+            if f["record_type"] in rtypes:
+                (self.pkg / f["file"]).unlink()
+        m["files"] = [f for f in m["files"] if f["record_type"] not in rtypes]
+        self.write_manifest(m)
+
     def assertOnly(self, result, expected):
         """Exactly the checks in `expected` ({id: number of findings}) report findings."""
         self.assertEqual({k: len(v) for k, v in failed(result).items()}, expected,
                          json.dumps(failed(result), indent=1))
+
+    def assertAdvisory(self, result, expected):
+        """Exactly the checks in `expected` report findings, all of them advisory, and the package passes."""
+        self.assertOnly(result, expected)
+        self.assertTrue(all(f["severity"] == "advisory" for fs in failed(result).values() for f in fs))
+        self.assertEqual(result["result"], "pass")
+        self.assertEqual(result["summary"]["blocking_findings"], 0)
+        self.assertEqual(result["summary"]["advisory_findings"], sum(expected.values()))
 
     def validate(self):
         return validate(self.pkg)
@@ -116,13 +153,63 @@ class DemoPackages(unittest.TestCase):
 
     def test_clean_package_covers_every_record_type_and_four_rails(self):
         m = json.loads((CLEAN / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual([f["record_type"] for f in m["files"]], [f"R{i}" for i in range(1, 13)])
+        self.assertEqual([f["record_type"] for f in m["files"]], [f"R{i}" for i in range(1, 15)])
+        self.assertEqual(m["standard_version"], "1.1")
+        self.assertEqual(m["conformance_level_declared"], "level_4")
         self.assertTrue(all(f["record_count"] >= 1 for f in m["files"]))
         self.assertTrue(40 <= sum(f["record_count"] for f in m["files"]) <= 80)
         rails = {json.loads(x)["rail"] for x in (CLEAN / "R3_deposits.jsonl").read_text().splitlines()}
         self.assertEqual(rails, {"card", "bank_transfer", "mobile_money", "virtual_asset"})
         kinds = [json.loads(x)["kind"] for x in (CLEAN / "R7_reconciliation_statements.jsonl").read_text().splitlines()]
         self.assertEqual(sorted(kinds), ["coverage", "location"])
+        channels = [json.loads(x)["channel"] for x in (CLEAN / R13).read_text().splitlines()]
+        self.assertEqual(channels, ["online", "online", "venue"])
+
+    def test_level_packages_pass_with_only_references_not_resolved_by_level(self):
+        # level_1: the manifest and R13 alone; the sports statement's authority figure points at R12, which the
+        # level does not require: advisory, not blocking.
+        res = validate(LEVEL1)
+        m = json.loads((LEVEL1 / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual((m["conformance_level_declared"], [f["record_type"] for f in m["files"]]), ("level_1", ["R13"]))
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual({k: len(v) for k, v in failed(res).items()}, {"REF-12": 1})
+        self.assertEqual(failed(res)["REF-12"][0], {
+            "file": None, "line": None, "record": None, "field": "authority_figure_ref/report_reference_id",
+            "detail": "authority_figure_ref/report_reference_id — not resolved: R12 is not required at level_1 and "
+                      "is not in the package", "severity": "advisory"})
+        self.assertEqual(res["summary"], {"checks": 22, "passed": 21, "failed": 1, "not_run": 0,
+                                          "blocking_findings": 0, "advisory_findings": 1})
+        self.assertEqual(check(res, "STR-09")["status"], "pass")
+        # level_2: the core, with R14 because the clean R13 has a venue line; every reference to the Custody and
+        # Supervision modules is an advisory finding, one per field and check.
+        res = validate(LEVEL2)
+        m = json.loads((LEVEL2 / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual((m["conformance_level_declared"], [f["record_type"] for f in m["files"]]),
+                         ("level_2", ["R3", "R4", "R7", "R13", "R14"]))
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual({k: len(v) for k, v in failed(res).items()}, LEVEL2_ADVISORY)
+        for f in (f for fs in failed(res).values() for f in fs):
+            self.assertEqual((f["severity"], f["file"], f["line"], f["record"]), ("advisory", None, None, None))
+            self.assertRegex(f["detail"], r"^[a-z_/]+ — not resolved: R\d+( and R\d+)? (is|are) not required at level_2 "
+                                          r"and (is|are) not in the package$")
+        self.assertEqual([f["detail"] for f in failed(res)["REF-11"]], [
+            "venue_id — not resolved: R1 is not required at level_2 and is not in the package",
+            "drop_deposit_ref — not resolved: R1 and R6 are not required at level_2 and are not in the package"])
+        self.assertEqual(res["summary"]["blocking_findings"], 0)
+        self.assertEqual(res["summary"]["advisory_findings"], 10)
+        self.assertTrue(all(not c["notes"] for c in res["checks"]))
+        for package in (LEVEL1, LEVEL2):
+            code, out, _ = run_cli(str(package))
+            self.assertEqual(code, 0)
+            self.assertIn("Result: PASS: no blocking findings", out)
+        self.assertIn("Result: PASS: no blocking findings, 10 advisory; declared level_2 (Evidence).", run_cli(str(LEVEL2))[1])
+        self.assertIn("Result: PASS: no blocking findings, 1 advisory; declared level_1 (Return).", run_cli(str(LEVEL1))[1])
+
+    def test_level_packages_are_cut_from_the_clean_data(self):
+        for package in (LEVEL1, LEVEL2):
+            for path in package.iterdir():
+                if path.name != "manifest.json":
+                    self.assertEqual(path.read_bytes(), (CLEAN / path.name).read_bytes(), path.name)
 
     def test_each_defect_is_detected_by_its_check(self):
         res = validate(DEFECTS)
@@ -133,6 +220,10 @@ class DemoPackages(unittest.TestCase):
             "REF-02": ("check_ids/0", "C-2026-11-9999"),
             "REF-03": ("instrument_id", "I-BANK-9999"),
             "REF-04": ("rail_reference", "D-2026-11-0013"),
+            "REF-09": ("period_end", SPORTS),
+            "REF-10": ("corrects_statement_id", "a statement of another line"),
+            "REF-12": ("authority_figure_ref/report_reference_id", "RR-2026-11-9999"),
+            "REF-13": ("ggr_declared", "stakes_cash - stakes_refunded - winnings_cash = 140.00"),
         }
         found = failed(res)
         self.assertEqual(set(found), set(expected))
@@ -141,7 +232,8 @@ class DemoPackages(unittest.TestCase):
             self.assertEqual(found[rule_id][0]["field"], field, rule_id)
             self.assertIn(text, found[rule_id][0]["detail"], rule_id)
         self.assertEqual(res["result"], "fail")
-        self.assertEqual(res["summary"]["blocking_findings"], 6)
+        self.assertEqual(res["summary"]["blocking_findings"], 9)
+        self.assertEqual(res["summary"]["advisory_findings"], 1)
 
     def test_defects_documented_in_make_demo_match_the_findings(self):
         documented = {rule_id for rule_id, _ in load_make_demo().DEFECTS}
@@ -150,7 +242,7 @@ class DemoPackages(unittest.TestCase):
     def test_demo_packages_are_reproducible(self):
         with tempfile.TemporaryDirectory() as tmp:
             load_make_demo().build(tmp)
-            for package in ("clean", "defects"):
+            for package in ("clean", "level1", "level2", "defects"):
                 ours = sorted(p.name for p in (ROOT / "demo" / package).iterdir())
                 theirs = sorted(p.name for p in (Path(tmp) / package).iterdir())
                 self.assertEqual(ours, theirs)
@@ -180,8 +272,26 @@ class CommandLine(unittest.TestCase):
         self.assertIn(f"fingerprint  SHA-256 {fingerprint}", out)
         self.assertLess(out.index("\nStructural:"), out.index("\nReferential:"))
         self.assertIn("REF-04  FAIL  blocking", out)
-        self.assertIn("Result: FAIL: 6 blocking findings, 0 advisory.", out)
+        self.assertIn("Result: FAIL: 9 blocking findings, 1 advisory; declared level_4 (Supervision).", out)
         self.assertIn("https://ctres.org/validator", out)
+
+    def test_summary_line_states_the_declared_level(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "pkg"
+            shutil.copytree(CLEAN, pkg)
+            m = json.loads((pkg / "manifest.json").read_text(encoding="utf-8"))
+            del m["conformance_level_declared"]
+            (pkg / "manifest.json").write_text(json.dumps(m, indent=2), encoding="utf-8")
+            self.assertIn("Result: PASS: no blocking findings, 0 advisory; level not declared.", run_cli(str(pkg))[1])
+            self.assertIn("STR-09  not run", run_cli(str(pkg))[1])
+        self.assertIn("declared level_2 (a delivery level of CTRES v1.0, not tested).", run_cli(str(CLEAN_1_0))[1])
+
+    def test_text_report_shows_a_check_with_advisory_findings_as_advisory(self):
+        code, out, _ = run_cli(str(LEVEL2))
+        self.assertEqual(code, 0)
+        self.assertIn("REF-03  FAIL  advisory  2 findings", out)
+        self.assertIn("          instrument_id — not resolved: R2 is not required at level_2 and is not in the package", out)
+        self.assertNotIn("blocking  ", out.split("\nReferential:")[1])
 
     def test_json_output_schema_is_stable(self):
         code, out, _ = run_cli(str(DEFECTS), "--json")
@@ -195,7 +305,7 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(res["fingerprint"], sha256((DEFECTS / "manifest.json").read_bytes()))
         self.assertEqual(list(res["manifest"]), ["package_id", "licence_number", "licensee", "profile_id",
                                                  "profile_version", "period_start", "period_end",
-                                                 "standard_version", "synthetic"])
+                                                 "standard_version", "conformance_level_declared", "synthetic"])
         self.assertEqual(list(res["summary"]), ["checks", "passed", "failed", "not_run",
                                                 "blocking_findings", "advisory_findings"])
         self.assertEqual([c["id"] for c in res["checks"]], RULE_IDS)
@@ -206,7 +316,22 @@ class CommandLine(unittest.TestCase):
             self.assertIn(c["severity"], ("blocking", "advisory"))
             self.assertIn(c["status"], ("pass", "fail", "not_run"))
             for f in c["findings"]:
-                self.assertEqual(list(f), ["file", "line", "record", "field", "detail"])
+                self.assertEqual(list(f), ["file", "line", "record", "field", "detail", "severity"])
+                self.assertEqual(f["severity"], c["severity"])      # nothing is downgraded in demo/defects
+
+    def test_json_output_lists_nine_structural_and_thirteen_referential_checks(self):
+        res = json.loads(run_cli(str(CLEAN), "--json")[1])
+        self.assertEqual([c["id"] for c in res["checks"]],
+                         [f"STR-0{i}" for i in range(1, 10)] + [f"REF-{i:02d}" for i in range(1, 14)])
+        self.assertEqual(res["summary"], {"checks": 22, "passed": 22, "failed": 0, "not_run": 0,
+                                          "blocking_findings": 0, "advisory_findings": 0})
+        self.assertEqual(res["standard_version"], "1.1")
+        self.assertEqual(res["manifest"]["standard_version"], "1.1")
+        self.assertEqual(res["manifest"]["conformance_level_declared"], "level_4")
+        self.assertEqual({c["id"]: c["severity"] for c in res["checks"] if c["id"] > "REF-08"},
+                         {"REF-09": "blocking", "REF-10": "blocking", "REF-11": "blocking", "REF-12": "blocking",
+                          "REF-13": "advisory"} | {f"STR-0{i}": "blocking" for i in range(1, 10)})
+        self.assertIn("money bridge", res["not_checked"])
 
     def test_json_output_is_deterministic(self):
         self.assertEqual(run_cli(str(DEFECTS), "--json")[1], run_cli(str(DEFECTS), "--json")[1])
@@ -344,6 +469,7 @@ class StructuralChecks(PackageCase):
         res = self.validate()
         self.assertOnly(res, {"STR-08": 1})
         self.assertEqual(check(res, "REF-07")["status"], "not_run")
+        self.assertEqual(check(res, "REF-09")["status"], "not_run")
 
     def test_str08_no_manifest_stops_every_other_check(self):
         (self.pkg / "manifest.json").unlink()
@@ -482,6 +608,91 @@ class StructuralChecks(PackageCase):
         self.assertOnly(self.validate(), {"STR-08": 1})
 
 
+class ConformanceLevel(PackageCase):
+    """STR-09: the record types the declared level requires are in the package (§10; Annex D)."""
+
+    def test_str09_record_type_the_level_requires_is_missing(self):
+        self.remove("R9")                                            # level_4 requires the Supervision module
+        res = self.validate()
+        self.assertOnly(res, {"STR-09": 1})
+        self.assertEqual(failed(res)["STR-09"][0], {
+            "file": "manifest.json", "line": None, "record": None, "field": "files", "severity": "blocking",
+            "detail": "R9 is required at level_4 (Supervision) but the manifest lists no R9 file"})
+        self.assertEqual(res["result"], "fail")
+        self.assertEqual(run_cli(str(self.pkg))[0], 1)
+
+    def test_str09_one_finding_per_missing_type_in_record_order(self):
+        self.remove("R12", "R2", "R5")
+        res = self.validate()
+        self.assertEqual(set(failed(res)), {"STR-09"})
+        self.assertEqual([f["detail"].split(" is required")[0] for f in failed(res)["STR-09"]], ["R2", "R5", "R12"])
+
+    def test_str09_each_level_requires_its_minimum_set(self):
+        minimum = {"level_1": {"R13"}, "level_2": {"R3", "R4", "R7", "R13"},
+                   "level_3": {"R1", "R2", "R3", "R4", "R6", "R7", "R10", "R11", "R13"},
+                   "level_4": {f"R{i}" for i in range(1, 14)}}
+        for level, required in minimum.items():
+            with self.subTest(level=level):
+                shutil.rmtree(self.pkg)
+                shutil.copytree(CLEAN, self.pkg)
+                self.set_level(level)
+                self.remove(*(t for t in [f"R{i}" for i in range(1, 15)] if t not in required and t != "R14"))
+                self.assertEqual(check(self.validate(), "STR-09")["status"], "pass", level)
+                for rtype in sorted(required):
+                    shutil.rmtree(self.pkg)
+                    shutil.copytree(CLEAN, self.pkg)
+                    self.set_level(level)
+                    self.remove(rtype)
+                    res = self.validate()
+                    self.assertEqual(len(failed(res).get("STR-09", [])), 1, (level, rtype))
+                    self.assertIn(f"{rtype} is required at {level}", failed(res)["STR-09"][0]["detail"])
+
+    def test_str09_extra_record_types_are_allowed_at_any_level(self):
+        self.set_level("level_1")                                    # every record type, at the lowest level
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "STR-09")["status"], "pass")
+        self.assertTrue(all(not c["notes"] for c in res["checks"]))   # every reference resolves: nothing downgraded
+
+    def test_str09_r14_required_from_level_2_where_an_r13_line_is_a_venue_line(self):
+        self.set_level("level_2")
+        self.remove("R14")
+        res = self.validate()
+        self.assertOnly(res, {"STR-09": 1})
+        self.assertEqual(failed(res)["STR-09"][0]["detail"],
+                         f"R14 is required at level_2 (Evidence) because an R13 line has channel venue ({FLOOR}) "
+                         "but the manifest lists no R14 file")
+        self.edit(R13, lambda rs: [r.update(channel="online") for r in rs if r["channel"] == "venue"])
+        self.assertOnly(self.validate(), {})                         # no venue line: R14 is not required
+
+    def test_str09_r14_not_required_at_level_1(self):
+        self.set_level("level_1")
+        self.remove("R14")
+        self.assertOnly(self.validate(), {})
+
+    def test_str09_not_run_without_a_declared_level(self):
+        self.set_level(None)
+        self.remove("R9")                                            # nothing requires it any more
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "STR-09")["status"], "not_run")
+        self.assertEqual(check(res, "STR-09")["notes"], ["not run: the manifest declares no conformance level"])
+        self.assertEqual(res["summary"]["not_run"], 1)
+        self.assertEqual(run_cli(str(self.pkg))[0], 0)
+
+    def test_str09_not_run_for_a_level_outside_the_enumeration(self):
+        self.set_level("level_5")
+        res = self.validate()
+        self.assertOnly(res, {"STR-08": 1})
+        self.assertEqual(failed(res)["STR-08"][0]["field"], "conformance_level_declared")
+        self.assertEqual(check(res, "STR-09")["status"], "not_run")
+        self.assertIn("not a level of §10", " ".join(check(res, "STR-09")["notes"]))
+
+    def test_str09_tests_the_manifest_listing_and_str01_the_file(self):
+        (self.pkg / "R9_incidents.jsonl").unlink()                   # listed, required at level_4, not present
+        self.assertOnly(self.validate(), {"STR-01": 1})
+
+
 # ------------------------------------------------------------------ referential checks
 
 class ReferentialChecks(PackageCase):
@@ -556,10 +767,8 @@ class ReferentialChecks(PackageCase):
         self.assertIn("BANK-01-STMT-20261123-0187", failed(res)["REF-06"][0]["detail"])
 
     def test_ref06_not_resolved_in_a_partial_package(self):
-        (self.pkg / "R4_withdrawals.jsonl").unlink()
-        m = self.manifest()
-        m["files"] = [f for f in m["files"] if f["record_type"] != "R4"]
-        self.write_manifest(m)
+        self.set_level(None)                                         # a partial package that declares no level
+        self.remove("R4")
         res = self.validate()
         self.assertOnly(res, {})
         self.assertIn("carries no R4 file", " ".join(check(res, "REF-06")["notes"]))
@@ -587,6 +796,8 @@ class ReferentialChecks(PackageCase):
         self.assertOnly(res, {})
         self.assertEqual(check(res, "REF-07")["status"], "not_run")
         self.assertIn("ends before it starts", " ".join(check(res, "REF-07")["notes"]))
+        self.assertEqual(check(res, "REF-09")["status"], "not_run")
+        self.assertEqual(res["summary"]["not_run"], 2)
 
     def test_ref08_attestation_does_not_exist(self):
         def change(rs):
@@ -597,6 +808,400 @@ class ReferentialChecks(PackageCase):
     def test_ref08_attestation_does_not_cover_the_location(self):
         self.edit("R11_provider_attestations.jsonl", lambda rs: rs[0].update(covers_location_ids=["L-PSP-01-BAL"]))
         self.assertOnly(self.validate(), {"REF-08": 5})
+
+
+class ReferencesByLevel(PackageCase):
+    """A reference to a record type the declared level does not require, where the package does not carry
+    the type, is an identifier in the operator's own systems: reported as advisory, not resolved (§10).
+    Where the type is in the package, or no level is declared, nothing changes."""
+
+    def test_reference_to_a_type_the_level_does_not_require_is_advisory(self):
+        self.set_level("level_2")
+        self.remove("R2")
+        res = self.validate()
+        self.assertAdvisory(res, {"REF-03": 2, "REF-06": 1})           # REF-06: related_record_ids may name R2 too
+        self.assertEqual(failed(res)["REF-06"][0]["detail"],
+                         "related_record_ids — not resolved: R2 is not required at level_2 and is not in the package")
+        self.assertEqual(failed(res)["REF-03"], [
+            {"file": None, "line": None, "record": None, "field": "instrument_id", "severity": "advisory",
+             "detail": "instrument_id — not resolved: R2 is not required at level_2 and is not in the package"},
+            {"file": None, "line": None, "record": None, "field": "source_instrument_ids", "severity": "advisory",
+             "detail": "source_instrument_ids — not resolved: R2 is not required at level_2 and is not in the package"}])
+        self.assertEqual(check(res, "REF-03")["notes"], [])
+        self.assertEqual(run_cli(str(self.pkg))[0], 0)
+
+    def test_reference_is_blocking_where_the_type_is_in_the_package_whatever_the_level(self):
+        self.set_level("level_2")
+        self.edit("R3_deposits.jsonl", lambda rs: rs[0].update(instrument_id="I-NOWHERE"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-03": 1})
+        self.assertEqual(failed(res)["REF-03"][0]["severity"], "blocking")
+        self.assertEqual(res["result"], "fail")
+
+    def test_reference_is_noted_not_reported_where_no_level_is_declared(self):
+        self.set_level(None)
+        self.remove("R2")
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "REF-03")["notes"], ["instrument_id not resolved: the package carries no R2 file",
+                                                        "source_instrument_ids not resolved: the package carries no R2 file"])
+
+    def test_reference_to_a_type_the_level_requires_is_noted_and_str09_reports_the_type(self):
+        self.set_level("level_3")
+        self.remove("R2")
+        res = self.validate()
+        self.assertOnly(res, {"STR-09": 1})
+        self.assertIn("instrument_id not resolved: the package carries no R2 file", check(res, "REF-03")["notes"])
+
+    def test_level_3_package_resolves_custody_and_leaves_supervision_advisory(self):
+        self.set_level("level_3")
+        self.remove("R5", "R8", "R9", "R12")
+        res = self.validate()
+        self.assertAdvisory(res, {"REF-02": 1, "REF-06": 1, "REF-12": 1})
+        self.assertEqual([f["detail"] for f in failed(res)["REF-02"]],
+                         ["check_ids — not resolved: R5 is not required at level_3 and is not in the package"])
+
+    def test_related_records_advisory_where_none_of_the_absent_types_is_required(self):
+        self.set_level("level_2")                                    # R12 included voluntarily at level_2
+        self.remove("R1", "R2", "R5", "R6", "R8", "R9", "R10", "R11")
+        res = self.validate()
+        self.assertIn("related_record_ids — not resolved: R1, R2, R5, R6, R8 and R10 are not required at level_2 "
+                      "and are not in the package", [f["detail"] for f in failed(res)["REF-06"]])
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual(res["summary"]["blocking_findings"], 0)
+
+    def test_related_records_noted_where_an_absent_type_is_required(self):
+        self.set_level("level_3")
+        self.remove("R1", "R5", "R8", "R9")                          # R1 is required at level_3; R5 and R8 are not
+        res = self.validate()
+        self.assertOnly(res, {"STR-09": 1, "REF-02": 1, "REF-06": 1})
+        self.assertEqual([f["field"] for f in failed(res)["REF-06"]], ["exception_ids"])   # related_record_ids: noted
+        self.assertIn("related_record_ids not resolved: the package carries no R1, R5, R8 file", check(res, "REF-06")["notes"])
+        self.assertIn("location_id not resolved: the package carries no R1 file", check(res, "REF-01")["notes"])
+
+    def test_one_advisory_finding_per_field_and_check(self):
+        self.set_level("level_2")
+        self.remove("R1", "R2", "R5", "R6", "R8", "R9", "R10", "R11", "R12")
+        res = self.validate()
+        self.assertAdvisory(res, LEVEL2_ADVISORY)
+        self.assertEqual(sorted(f["field"] for f in failed(res)["REF-11"]), ["drop_deposit_ref", "venue_id"])
+
+    def test_venue_reference_advisory_at_level_2_and_drop_resolved_in_r6(self):
+        self.set_level("level_2")
+        self.remove("R1")                                            # R6 stays: the drop banking still resolves
+        res = self.validate()
+        self.assertAdvisory(res, {"REF-01": 4, "REF-06": 1, "REF-11": 1})
+        self.assertEqual([f["field"] for f in failed(res)["REF-01"]],
+                         ["location_id", "covers_location_ids", "source_location_id", "destination_location_id"])
+        self.assertEqual(failed(res)["REF-11"][0]["detail"],
+                         "venue_id — not resolved: R1 is not required at level_2 and is not in the package")
+
+
+# ------------------------------------------------------------------ gaming revenue and venue counts (v1.1)
+
+class RevenueAndVenueChecks(PackageCase):
+    """R13 gaming revenue statements and R14 venue counts: the checks added in 1.1, and the structural
+    checks as they apply to the two record types."""
+
+    def test_ref09_statement_period_outside_the_manifest_period(self):
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(period_start="2026-10-31T00:00:00+01:00"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-09": 1})
+        self.assertEqual(failed(res)["REF-09"][0]["field"], "period_start")
+        self.assertEqual(res["result"], "fail")
+
+    def test_ref09_statement_period_is_compared_offset_aware(self):
+        # 2026-10-31T23:00:00Z is the manifest's 2026-11-01T00:00:00+01:00: inside the period
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(period_start="2026-10-31T23:00:00Z"))
+        self.assertOnly(self.validate(), {})
+
+    def test_ref09_gaming_day_outside_the_manifest_period(self):
+        self.edit(R14, lambda rs: rs[0].update(gaming_day="2026-12-01"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-09": 1})
+        self.assertEqual(failed(res)["REF-09"][0]["field"], "gaming_day")
+        self.assertIn("gaming_day 2026-12-01 is outside the period", failed(res)["REF-09"][0]["detail"])
+
+    def test_ref09_gaming_days_on_the_boundary_dates_are_inside(self):
+        def change(rs):
+            rs[0]["gaming_day"], rs[1]["gaming_day"] = "2026-11-01", "2026-11-30"
+        self.edit(R14, change)
+        self.assertOnly(self.validate(), {})
+
+    def test_ref09_venue_count_period_outside_the_manifest_period(self):
+        def change(rs):
+            del rs[0]["gaming_day"]
+            rs[0].update(period_start="2026-11-14T06:00:00+01:00", period_end="2026-12-01T05:59:59+01:00")
+        self.edit(R14, change)
+        res = self.validate()
+        self.assertOnly(res, {"REF-09": 1})
+        self.assertEqual(failed(res)["REF-09"][0]["field"], "period_end")
+
+    def test_ref10_correction_that_names_itself(self):
+        def change(rs):
+            self.record(rs, "statement_id", CASINO).update(statement_kind="correction", corrects_statement_id=CASINO,
+                                                            correction_reason="Re-settlement")
+        self.edit(R13, change)
+        res = self.validate()
+        self.assertOnly(res, {"REF-10": 1})
+        self.assertIn("names itself", failed(res)["REF-10"][0]["detail"])
+
+    def test_ref10_correction_of_a_statement_of_another_line(self):
+        def change(rs):
+            self.record(rs, "statement_id", CASINO).update(statement_kind="correction", corrects_statement_id=SPORTS,
+                                                            correction_reason="Re-settlement")
+        self.edit(R13, change)
+        res = self.validate()
+        self.assertOnly(res, {"REF-10": 1})
+        self.assertIn("product_line SPORTS-PREMATCH-LIVE, not CASINO-SLOTS", failed(res)["REF-10"][0]["detail"])
+
+    def test_ref10_corrections_that_replace_each_other(self):
+        def change(rs):
+            rs[0].update(statement_kind="correction", corrects_statement_id=rs[1]["statement_id"],
+                         correction_reason="x", product_line=rs[1]["product_line"])
+            rs[1].update(statement_kind="correction", corrects_statement_id=rs[0]["statement_id"], correction_reason="y")
+        self.edit(R13, change)
+        res = self.validate()
+        self.assertOnly(res, {"REF-10": 2})
+        self.assertIn("chain returns to", failed(res)["REF-10"][0]["detail"])
+
+    def test_ref10_statement_the_package_does_not_carry_is_noted_not_reported(self):
+        def change(rs):
+            self.record(rs, "statement_id", CASINO).update(
+                statement_kind="correction", corrects_statement_id="GRS-2026-10-XJ-DEMO-0001-CASINO-ONLINE-EUR",
+                correction_reason="Jackpot revaluation")
+        self.edit(R13, change)
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertIn("may belong to an earlier package", " ".join(check(res, "REF-10")["notes"]))
+
+    def test_ref10_correction_of_a_statement_of_the_same_line(self):
+        def change(rs):
+            correction = dict(self.record(rs, "statement_id", CASINO))
+            correction.update(statement_id=CASINO + "-C1", statement_kind="correction", corrects_statement_id=CASINO,
+                              correction_reason="Re-settlement", winnings_cash="2822.00", ggr_declared="128.00")
+            rs.append(correction)
+        self.edit(R13, change)
+        self.assertOnly(self.validate(), {})
+
+    def test_ref11_venue_no_r1_location_carries(self):
+        self.edit(R14, lambda rs: rs[2].update(venue_id="V-NOWHERE"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-11": 1})
+        self.assertEqual(failed(res)["REF-11"][0]["field"], "venue_id")
+
+    def test_ref11_venue_not_resolved_where_no_r1_location_carries_venue_id(self):
+        self.edit("R1_funds_locations.jsonl", lambda rs: [r.pop("venue_id", None) for r in rs])
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertIn("no R1 location carries venue_id", " ".join(check(res, "REF-11")["notes"]))
+
+    def test_ref11_drop_banked_to_a_movement_that_does_not_exist(self):
+        self.edit(R14, lambda rs: rs[1].update(drop_deposit_ref="M-NOWHERE"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-11": 1})
+        self.assertEqual(failed(res)["REF-11"][0]["field"], "drop_deposit_ref")
+
+    def test_ref11_drop_banked_to_an_r1_cash_float(self):
+        self.edit(R14, lambda rs: [r.update(drop_deposit_ref="L-VENUE-01-FLOAT") for r in rs])
+        self.assertOnly(self.validate(), {})
+
+    def test_ref11_drop_not_resolved_in_a_package_without_r6(self):
+        self.set_level(None)
+        self.remove("R6")
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertIn("carries no R6 file", " ".join(check(res, "REF-11")["notes"]))
+
+    def test_ref12_authority_figure_cites_a_report_reference_that_does_not_exist(self):
+        def change(rs):
+            self.record(rs, "statement_id", SPORTS)["authority_figure_ref"]["report_reference_id"] = "RR-NOWHERE"
+        self.edit(R13, change)
+        res = self.validate()
+        self.assertOnly(res, {"REF-12": 1})
+        self.assertEqual(failed(res)["REF-12"][0]["field"], "authority_figure_ref/report_reference_id")
+
+    def test_ref12_not_resolved_in_a_package_without_r12(self):
+        self.set_level(None)
+        self.remove("R12")
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertIn("carries no R12 file", " ".join(check(res, "REF-12")["notes"]))
+
+    def test_ref13_all_in_formula_not_followed_is_advisory(self):
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(ggr_declared="211.00"))
+        res = self.validate()
+        self.assertOnly(res, {"REF-13": 1})
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual(res["summary"]["advisory_findings"], 1)
+        self.assertIn("(stakes_cash + stakes_bonus - stakes_refunded) - (winnings_cash + winnings_bonus) = 210.00",
+                      failed(res)["REF-13"][0]["detail"])
+        self.assertEqual(run_cli(str(self.pkg))[0], 0)
+
+    def test_ref13_cash_only_formula_leaves_bonus_play_out(self):
+        # The casino line carries bonus stakes and winnings; all_in would give 155.00, cash_only gives 140.00.
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", CASINO).update(ggr_declared="155.00"))
+        self.assertOnly(self.validate(), {"REF-13": 1})
+
+    def test_ref13_all_in_without_bonus_fields_counts_them_as_zero(self):
+        def change(rs):
+            r = self.record(rs, "statement_id", SPORTS)
+            for k in ("stakes_bonus", "winnings_bonus", "bonus_granted", "bonus_expired", "bonus_measurement"):
+                del r[k]
+            r["ggr_declared"] = "150.00"                         # (4800 - 60) - 4590
+        self.edit(R13, change)
+        self.assertOnly(self.validate(), {})
+
+    def test_ref13_arithmetic_is_exact(self):
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(ggr_declared="210.0"))
+        self.assertOnly(self.validate(), {})
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(ggr_declared="210.001"))
+        self.assertOnly(self.validate(), {"REF-13": 1})
+
+    def test_ref13_negative_gross_gaming_revenue(self):
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", CASINO).update(winnings_cash="3000.00", ggr_declared="-50.00"))
+        self.assertOnly(self.validate(), {})
+
+    def test_ref13_profile_formula_is_not_tested(self):
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", SPORTS).update(ggr_formula="profile", ggr_declared="1.00"))
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertIn("ggr_formula profile", " ".join(check(res, "REF-13")["notes"]))
+
+    def test_str04_venue_count_with_both_a_gaming_day_and_a_period(self):
+        self.edit(R14, lambda rs: rs[0].update(period_start="2026-11-14T06:00:00+01:00", period_end="2026-11-15T05:59:59+01:00"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 1})
+        self.assertEqual(failed(res)["STR-04"][0]["detail"],
+                         f"{SLOT}: exactly one of gaming_day or period_start and period_end is required")
+
+    def test_str04_venue_count_with_neither_a_gaming_day_nor_a_period(self):
+        self.edit(R14, lambda rs: rs[0].pop("gaming_day"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 1})
+        self.assertIn("exactly one of gaming_day or period_start and period_end", failed(res)["STR-04"][0]["detail"])
+
+    def test_str04_fields_the_unit_type_requires_or_excludes(self):
+        def change(rs):
+            del rs[0]["meters_end"]                               # a slot machine row needs both meter sets
+            rs[1]["hard_count"] = "1.00"                          # a table row carries no count-room totals
+        self.edit(R14, change)
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 2})
+        self.assertEqual([f["field"] for f in failed(res)["STR-04"]], ["meters_end", "hard_count"])
+
+    def test_str04_slot_row_without_meters_where_the_source_left_no_record(self):
+        def change(rs):
+            rs[0].pop("meters_start"), rs[0].pop("meters_end")      # no meter: the row wins by the drop formula
+            rs[0].update(meter_source="not_recorded", win_formula="slot_drop_formula", drop_cash="74.00", fills="0.00")
+        self.edit(R14, change)
+        self.assertOnly(self.validate(), {})
+
+    def test_str04_slot_row_by_the_drop_formula_without_drop_and_fills(self):
+        self.edit(R14, lambda rs: rs[0].update(win_formula="slot_drop_formula"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 2})
+        self.assertEqual([f["field"] for f in failed(res)["STR-04"]], ["drop_cash", "fills"])
+
+    def test_str05_win_formula_that_does_not_fit_the_unit_type(self):
+        def change(rs):
+            rs[0]["win_formula"] = "table_drop_formula"             # a slot machine row
+            rs[1]["win_formula"] = "slot_meter_formula"             # a table row
+            rs[2]["win_formula"] = "table_drop_formula"             # a venue_total row names any formula
+        self.edit(R14, change)
+        res = self.validate()
+        self.assertOnly(res, {"STR-05": 2})
+        self.assertEqual([(f["record"], f["field"]) for f in failed(res)["STR-05"]],
+                         [(SLOT, "win_formula"), ("VC-2026-11-14-V-DEMO-01-T-01", "win_formula")])
+
+    def test_str04_bonus_stakes_without_the_bonus_bridge(self):
+        self.edit(R13, lambda rs: [self.record(rs, "statement_id", SPORTS).pop(k) for k in ("bonus_granted", "bonus_expired")])
+        res = self.validate()
+        self.assertEqual(set(failed(res)), {"STR-04"})
+        self.assertTrue(all("is a dependency of" in f["detail"] for f in failed(res)["STR-04"]))
+
+    def test_statement_with_venue_id_and_player_location(self):
+        def change(rs):
+            self.record(rs, "statement_id", SPORTS).update(channel="venue", venue_id="V-DEMO-01")
+            self.record(rs, "statement_id", CASINO).update(player_location="XJ", stakes_basis="accrual_at_result")
+        self.edit(R13, change)
+        self.assertOnly(self.validate(), {})
+        self.edit(R13, lambda rs: self.record(rs, "statement_id", CASINO).update(player_location="Example"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 1})
+        self.assertEqual(failed(res)["STR-04"][0]["field"], "player_location")
+
+    def test_str04_period_statement_with_a_correction_field(self):
+        self.edit(R13, lambda rs: rs[0].update(corrects_statement_id="GRS-X"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 1})
+        self.assertEqual(failed(res)["STR-04"][0]["field"], "corrects_statement_id")
+
+    def test_str04_undefined_field_on_a_statement(self):
+        self.edit(R13, lambda rs: rs[0].update(ngr_declared="1.00"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-04": 1})
+        self.assertEqual(failed(res)["STR-04"][0]["detail"], f"{SPORTS}: not defined for this record: ngr_declared")
+
+    def test_str05_and_str06_on_the_new_record_types(self):
+        self.edit(R13, lambda rs: rs[0].update(ggr_formula="net"))
+        self.edit(R14, lambda rs: rs[0].update(gaming_day="2026-11-31"))
+        res = self.validate()
+        self.assertOnly(res, {"STR-05": 1, "STR-06": 1})
+
+    def test_str07_repeated_statement_and_count_identifiers(self):
+        self.edit(R13, lambda rs: rs.append(dict(rs[0])))
+        self.edit(R14, lambda rs: rs.append(dict(rs[0])))
+        res = self.validate()
+        self.assertOnly(res, {"STR-07": 2})
+        self.assertEqual([f["record"] for f in failed(res)["STR-07"]], [SPORTS, SLOT])
+
+
+# ------------------------------------------------------------------ packages produced under CTRES v1.0
+
+class Packages10(unittest.TestCase):
+    """A package produced under CTRES v1.0 (tests/fixtures/clean_1_0, the clean package of release 1.0.1)
+    is validated unchanged; one that lists an R13 file must declare standard_version 1.1."""
+
+    def test_1_0_package_passes_with_no_findings(self):
+        # The fixture declares level_2 in its v1.0 meaning, a delivery level: STR-09 is not run, nothing is
+        # downgraded, and every other check passes without a note.
+        res = validate(CLEAN_1_0)
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual(failed(res), {})
+        self.assertTrue(all(c["status"] == "pass" and not c["notes"] for c in res["checks"] if c["id"] != "STR-09"))
+        self.assertEqual(check(res, "STR-09")["status"], "not_run")
+        self.assertEqual(check(res, "STR-09")["notes"], [
+            "not run: the package declares standard_version 1.0, under which conformance_level_declared level_2 is a "
+            "delivery level of v1.0, not a level of §10 of v1.1"])
+        self.assertEqual(res["summary"]["not_run"], 1)
+        self.assertEqual(res["manifest"]["standard_version"], "1.0")
+        self.assertEqual(res["manifest"]["conformance_level_declared"], "level_2")
+        self.assertEqual(res["standard_version"], "1.1")
+        m = json.loads((CLEAN_1_0 / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual([f["record_type"] for f in m["files"]], [f"R{i}" for i in range(1, 13)])
+        self.assertEqual(run_cli(str(CLEAN_1_0))[0], 0)
+
+    def test_1_0_package_that_lists_an_r13_file_fails_the_manifest_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pkg = Path(tmp) / "pkg"
+            shutil.copytree(CLEAN_1_0, pkg)
+            records = [json.loads(x) for x in (CLEAN / R13).read_text(encoding="utf-8").splitlines() if x.strip()]
+            records = [r for r in records if r["channel"] != "venue"]   # the 1.0 package carries no R14 for a venue line
+            for r in records:
+                r.pop("authority_figure_ref", None)              # the 1.0 package carries no levy return in R12
+            text = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in records)
+            (pkg / R13).write_text(text, encoding="utf-8")
+            m = json.loads((pkg / "manifest.json").read_text(encoding="utf-8"))
+            m["files"].append({"file": R13, "record_type": "R13", "record_count": len(records), "sha256": sha256(text)})
+            (pkg / "manifest.json").write_text(json.dumps(m, indent=2), encoding="utf-8")
+            res = validate(pkg)
+            self.assertEqual({k: len(v) for k, v in failed(res).items()}, {"STR-08": 1})
+            self.assertEqual(failed(res)["STR-08"][0]["field"], "standard_version")
+            self.assertIn("1.1", failed(res)["STR-08"][0]["detail"])
+            m["standard_version"] = "1.1"
+            (pkg / "manifest.json").write_text(json.dumps(m, indent=2), encoding="utf-8")
+            self.assertEqual(failed(validate(pkg)), {})
 
 
 # ------------------------------------------------------------------ valid variations (no false positives)

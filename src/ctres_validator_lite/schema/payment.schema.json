@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/payment.schema.json",
-  "title": "CTRES v1.0 R3 Deposit and R4 Withdrawal (shared payment record)",
+  "$id": "https://ctres.org/schema/1.1/payment.schema.json",
+  "title": "CTRES v1.1 R3 Deposit and R4 Withdrawal (shared payment record)",
   "description": "The two records that carry the money (§4.3, §4.4). Both reference the instrument, the checks relied upon and the ledger entry. This schema defines the fields shared by R3 and R4; records/r03_deposit.schema.json and records/r04_withdrawal.schema.json fix the direction. Rail-module fields (§6) are permitted only for the rail they belong to.",
   "type": "object",
   "properties": {

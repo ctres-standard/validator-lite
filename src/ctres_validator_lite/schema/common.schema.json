@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/common.schema.json",
-  "title": "CTRES v1.0 common definitions",
-  "description": "Types and enumerations shared by the CTRES v1.0 record, manifest and profile schemas. Common Transaction Reporting and Evidence Standard v1.0 (universal edition, 2 October 2026). Section references (§) are to that text.",
+  "$id": "https://ctres.org/schema/1.1/common.schema.json",
+  "title": "CTRES v1.1 common definitions",
+  "description": "Types and enumerations shared by the CTRES v1.1 record, manifest and profile schemas. Common Transaction Reporting and Evidence Standard v1.1: the universal edition of 2 October 2026 (v1.0) extended with R13 Gaming Revenue Statement (§4.13), R14 Venue Count (§4.14) and the Revenue and levy profile parameters (§5). Section references (§) are to that text.",
   "$defs": {
     "decimal": {
       "description": "A decimal number written as a JSON string, never as a JSON number, so that no floating-point rounding can occur (§3 Currency-aware; §8.2). A leading minus sign is permitted.",
@@ -373,7 +373,7 @@
       ]
     },
     "report_type": {
-      "description": "Type of report filed with another authority (§4.12).",
+      "description": "Type of report filed with another authority (§4.12). levy_return is the operator's levy or gaming-tax return for a period; an R13 statement cites it through authority_figure_ref (§4.12; §4.13).",
       "type": "string",
       "enum": [
         "suspicious_transaction_report",
@@ -382,7 +382,8 @@
         "casino_disbursement_report",
         "periodic_systematic_report",
         "tax_remittance",
-        "regulator_notification"
+        "regulator_notification",
+        "levy_return"
       ]
     },
     "reporting_channel": {

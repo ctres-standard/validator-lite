@@ -1,0 +1,447 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.1/records/r13_gaming_revenue_statement.schema.json",
+  "title": "CTRES v1.1 R13 Gaming Revenue Statement",
+  "description": "What the house won, by product and period (§4.13): one statement per licence, product line, channel, currency and period, and per venue or player location where the profile splits revenue by premises or by player location. The statement carries stakes and winnings with the recognition rule applied, the bonus, jackpot, network and open-liability components that bridge it to the money in R3, R4 and R7, the operator's gross gaming revenue and, where the profile requires self-assessment, the levy. A correction is a separate statement of kind correction that replaces an earlier one. Records per bet or round stay with the operator and are cited through evidence_ref.",
+  "type": "object",
+  "properties": {
+    "statement_id": {
+      "description": "Statement identifier (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "statement_kind": {
+      "description": "Kind of statement: a period statement, or a correction that replaces an earlier statement after a re-settlement, a void after settlement or a jackpot revaluation (§4.13).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "period",
+        "correction"
+      ]
+    },
+    "licence_ref": {
+      "description": "Licence the statement reports under, as in the manifest (§4.13; §8.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "product_line": {
+      "description": "The operator's own product or game-type code (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "channel": {
+      "description": "Channel the revenue was earned through: online, retail points, or a venue (§4.13).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "online",
+        "retail",
+        "venue"
+      ]
+    },
+    "period_start": {
+      "description": "Start of the period covered; period boundaries follow the period and cut-off of the profile (§4.13; §5 Revenue and levy period_and_filing).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the period covered (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "currency": {
+      "description": "Currency or asset in which the amounts of the statement are stated; one statement per currency (§4.13; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_or_asset"
+    },
+    "stakes_basis": {
+      "description": "Recognition rule applied to stakes, matching the profile's recognition.stakes_basis: when placed or accepted, when settled, when the cash was received, or by accrual when the result is known (§4.13; §5 Revenue and levy recognition).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "placed",
+        "settled",
+        "cash",
+        "accrual_at_result"
+      ]
+    },
+    "winnings_basis": {
+      "description": "Recognition rule applied to winnings, matching the profile's recognition.winnings_basis: when paid, when credited to the player account, or when payable (§4.13; §5 Revenue and levy recognition).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "paid",
+        "credited",
+        "payable"
+      ]
+    },
+    "stakes_cash": {
+      "description": "Stakes funded from real money (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "stakes_refunded": {
+      "description": "Stakes returned or voided in the period; zero where there were none (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "winnings_cash": {
+      "description": "Winnings paid or credited from real money, gross of any withholding tax (§4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "ggr_declared": {
+      "description": "The operator's gross gaming revenue for the line; negative where winnings exceeded stakes (§4.13; §5 Revenue and levy negative_periods).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "ggr_formula": {
+      "description": "Formula that produced ggr_declared: all_in (stakes including bonus-funded stakes, less refunds, minus winnings including bonus winnings), cash_only (cash stakes less refunds, minus cash winnings), or profile (the terms of the profile's levy formula) (§4.13; §5 Revenue and levy levy_formula).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "all_in",
+        "cash_only",
+        "profile"
+      ]
+    },
+    "prepared_by": {
+      "description": "Who prepared the statement, as in R7 (§4.13; §4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "reviewed_by": {
+      "description": "Who reviewed the statement, as in R7 (§4.13; §4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "evidence_ref": {
+      "description": "Where the platform report behind the line is retained, or not_recorded where no report was retained (§4.13; §7; §3 Visible gaps).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    },
+    "corrects_statement_id": {
+      "description": "The statement this correction replaces (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where statement_kind is correction; not used on period statements (§4.13).",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "correction_reason": {
+      "description": "Why the earlier statement is replaced, for example a re-settlement, a void after settlement or a jackpot revaluation (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where statement_kind is correction; not used on period statements (§4.13).",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "brand": {
+      "description": "Brand the statement covers, where the profile splits revenue by brand (§4.13; §5 Revenue and levy).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "jurisdiction_category": {
+      "description": "The category of the profile's product taxonomy that product_line maps to (§4.13; §5 Revenue and levy).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile publishes a product taxonomy (§5 Revenue and levy aggregation taxonomy).",
+      "$ref": "../common.schema.json#/$defs/snake_code"
+    },
+    "venue_id": {
+      "description": "Venue the line covers, as carried by venue_id on the venue's R1 cash_float location and on its R14 rows, so that the rows of the venue sum to this line (§4.13; §4.14; §4.1).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where channel is venue and the licence covers more than one venue, or the profile's aggregation axes include venue (§4.13; §5 Revenue and levy aggregation). The licence and the profile are not visible to the record, so this schema does not enforce the condition.",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "player_location": {
+      "description": "Country or region of the players the line covers, as an ISO 3166 code, as the profile sets, the players' residence or their location at play (§4.13; §5 Revenue and levy aggregation).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's aggregation axes include player_location (§5 Revenue and levy aggregation). The profile is not visible to the record, so this schema does not enforce the condition.",
+      "$ref": "../common.schema.json#/$defs/jurisdiction_code"
+    },
+    "fx_rate": {
+      "description": "Units of the reporting currency per unit of currency, applied to the statement as a whole and never per bet (§4.13; §3 Currency-aware).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where currency differs from the reporting currency of the manifest (§4.13). The manifest is not visible to the record, so this schema does not enforce the condition; where one of fx_rate, fx_source and fx_at is present, the other two are required.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "fx_source": {
+      "description": "Source of the rate in fx_rate (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where currency differs from the reporting currency of the manifest; required where fx_rate is present (§4.13).",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "fx_at": {
+      "description": "When the rate in fx_rate was taken (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where currency differs from the reporting currency of the manifest; required where fx_rate is present (§4.13).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "stakes_bonus": {
+      "description": "Stakes funded from bonus or promotional credits (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where bonus or promotional credits exist for the product line (§4.13). Where present, bonus_measurement, bonus_granted and bonus_expired are required.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "winnings_bonus": {
+      "description": "Winnings credited as non-cashable credits (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where bonus or promotional credits exist for the product line (§4.13). Where present, bonus_measurement, bonus_granted and bonus_expired are required.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "winnings_withholding_tax": {
+      "description": "Tax withheld from winnings at payout in the period (§4.13; §4.3 tax_lines).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile levies a withholding tax on winnings (§5 Taxes at the point of payment; §5 Revenue and levy notes taxes_in_base).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "bonus_granted": {
+      "description": "Promotional credits issued in the period, needed for the money bridge to R3, R4 and R7 (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where bonus or promotional credits exist for the product line; required where stakes_bonus or winnings_bonus is present (§4.13). bonus_granted and bonus_expired are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "bonus_expired": {
+      "description": "Promotional credits forfeited or expired in the period (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where bonus or promotional credits exist for the product line; required where stakes_bonus or winnings_bonus is present (§4.13). bonus_granted and bonus_expired are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "bonus_measurement": {
+      "description": "How the split between cash and bonus was measured: per round by the wallet engine, or allocated from wallet totals (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where stakes_bonus or winnings_bonus is present (§4.13).",
+      "type": "string",
+      "enum": [
+        "per_round",
+        "allocated_from_wallet_totals"
+      ]
+    },
+    "rake_and_fees": {
+      "description": "Commission, rake, tournament and entry fees earned (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the product line is commission-based (§4.13; §5 Revenue and levy levy_formula).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "jackpot_contributions": {
+      "description": "Contributions to progressive or pooled jackpots in the period (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where progressive or pooled jackpots exist for the product line (§4.13). jackpot_contributions and jackpot_payouts are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "jackpot_payouts": {
+      "description": "Progressive or pooled jackpots paid in the period (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where progressive or pooled jackpots exist for the product line (§4.13). jackpot_contributions and jackpot_payouts are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "network_due_to": {
+      "description": "Amounts due to a network or pool operator for pooled or network products, for example poker networks, shared jackpots or exchanges (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the product line is a pooled or network product (§4.13). network_due_to and network_due_from are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "network_due_from": {
+      "description": "Amounts due from a network or pool operator (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the product line is a pooled or network product (§4.13). network_due_to and network_due_from are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "open_liability_start": {
+      "description": "Unsettled bets and unfinished games at the cut-off that starts the period (§4.13; §4.7 open_bets_total).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where unsettled bets or unfinished games can exist for the product line (§4.13). open_liability_start and open_liability_end are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "open_liability_end": {
+      "description": "Unsettled bets and unfinished games at the cut-off that ends the period (§4.13; §4.7 open_bets_total).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where unsettled bets or unfinished games can exist for the product line (§4.13). open_liability_start and open_liability_end are stated together.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "bets_count": {
+      "description": "Number of bets in the period (§4.13).",
+      "x-ctres-req": "O",
+      "type": "integer",
+      "minimum": 0
+    },
+    "rounds_count": {
+      "description": "Number of game rounds in the period (§4.13).",
+      "x-ctres-req": "O",
+      "type": "integer",
+      "minimum": 0
+    },
+    "active_players": {
+      "description": "Number of players who staked in the period (§4.13).",
+      "x-ctres-req": "O",
+      "type": "integer",
+      "minimum": 0
+    },
+    "levy_base_declared": {
+      "description": "The levy base for the line, self-assessed under the profile's levy formula (§4.13; §5 Revenue and levy levy_formula).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's figure of record is the operator's declaration (§5 Revenue and levy period_and_filing figure_of_record).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "levy_rate": {
+      "description": "Rate applied to levy_base_declared, as a decimal fraction: 0.20 means 20% (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's figure of record is the operator's declaration and the levy formula applies a rate or bands (§5 Revenue and levy levy_formula). Requires levy_base_declared.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "levy_amount_declared": {
+      "description": "The levy self-assessed for the line (§4.13).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's figure of record is the operator's declaration (§5 Revenue and levy period_and_filing figure_of_record). Requires levy_base_declared.",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "authority_figure_ref": {
+      "description": "The authority's own figure for the same line, where the authority computes it from its own system; a difference from the declared figure is raised as an R8 exception (§4.13; §4.12; §4.8).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's period_and_filing.figure_of_record is authority_computation (§5 Revenue and levy; §4.13). The profile is not visible to the record, so this schema does not enforce the condition.",
+      "type": "object",
+      "properties": {
+        "report_reference_id": {
+          "description": "The R12 report reference of the return or assessment that carries the authority's figure (§4.12; §4.13).",
+          "x-ctres-req": "M",
+          "$ref": "../common.schema.json#/$defs/identifier"
+        },
+        "figure": {
+          "description": "Which declared figure the authority's amount corresponds to (§4.13).",
+          "x-ctres-req": "M",
+          "type": "string",
+          "enum": [
+            "ggr",
+            "levy_base",
+            "levy_amount"
+          ]
+        },
+        "amount": {
+          "description": "The authority's figure (§4.13).",
+          "x-ctres-req": "M",
+          "$ref": "../common.schema.json#/$defs/decimal"
+        },
+        "currency": {
+          "description": "Currency of amount, where it differs from the currency of the statement (§4.13; §3 Currency-aware).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/currency_or_asset"
+        }
+      },
+      "required": [
+        "report_reference_id",
+        "figure",
+        "amount"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "statement_id",
+    "statement_kind",
+    "licence_ref",
+    "product_line",
+    "channel",
+    "period_start",
+    "period_end",
+    "currency",
+    "stakes_basis",
+    "winnings_basis",
+    "stakes_cash",
+    "stakes_refunded",
+    "winnings_cash",
+    "ggr_declared",
+    "ggr_formula",
+    "prepared_by",
+    "reviewed_by",
+    "evidence_ref"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "statement_kind": {
+            "const": "correction"
+          }
+        },
+        "required": [
+          "statement_kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "corrects_statement_id",
+          "correction_reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "statement_kind": {
+            "const": "period"
+          }
+        },
+        "required": [
+          "statement_kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "corrects_statement_id": false,
+          "correction_reason": false
+        }
+      }
+    }
+  ],
+  "dependentRequired": {
+    "fx_rate": [
+      "fx_source",
+      "fx_at"
+    ],
+    "fx_source": [
+      "fx_rate",
+      "fx_at"
+    ],
+    "fx_at": [
+      "fx_rate",
+      "fx_source"
+    ],
+    "stakes_bonus": [
+      "bonus_measurement",
+      "bonus_granted",
+      "bonus_expired"
+    ],
+    "winnings_bonus": [
+      "bonus_measurement",
+      "bonus_granted",
+      "bonus_expired"
+    ],
+    "bonus_granted": [
+      "bonus_expired"
+    ],
+    "bonus_expired": [
+      "bonus_granted"
+    ],
+    "jackpot_contributions": [
+      "jackpot_payouts"
+    ],
+    "jackpot_payouts": [
+      "jackpot_contributions"
+    ],
+    "network_due_to": [
+      "network_due_from"
+    ],
+    "network_due_from": [
+      "network_due_to"
+    ],
+    "open_liability_start": [
+      "open_liability_end"
+    ],
+    "open_liability_end": [
+      "open_liability_start"
+    ],
+    "levy_rate": [
+      "levy_base_declared"
+    ],
+    "levy_amount_declared": [
+      "levy_base_declared"
+    ]
+  },
+  "unevaluatedProperties": false
+}

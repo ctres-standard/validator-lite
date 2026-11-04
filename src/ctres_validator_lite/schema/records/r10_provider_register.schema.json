@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r10_provider_register.schema.json",
-  "title": "CTRES v1.0 R10 Provider Register",
+  "$id": "https://ctres.org/schema/1.1/records/r10_provider_register.schema.json",
+  "title": "CTRES v1.1 R10 Provider Register",
   "description": "Each provider that handles player money, with its authorisation, due diligence and data location (§4.10).",
   "type": "object",
   "properties": {

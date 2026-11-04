@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Write the synthetic demonstration packages demo/clean and demo/defects.
+"""Write the synthetic demonstration packages demo/clean, demo/level1, demo/level2 and demo/defects.
 
 Usage:  python scripts/make_demo.py [OUT_DIR]        (default: demo/)
 
-Both packages describe a fictional operator, licence and profile in the fictional jurisdiction XJ
-(an ISO 3166-1 user-assigned code). Every value is invented. demo/clean passes every check of
-validator-lite; demo/defects is the same package with the deliberate defects listed in DEFECTS
-(and in demo/README.md). The output is byte-for-byte reproducible.
+All four packages describe a fictional operator, licence and profile in the fictional jurisdiction
+XJ (an ISO 3166-1 user-assigned code), from the same synthetic data. Every value is invented.
+demo/clean is a CTRES v1.1 package with every record type (standard_version 1.1, R13 gaming revenue
+statements and R14 venue counts included) that declares level_4 and passes every check of
+validator-lite. demo/level1 (manifest + R13, level_1) and demo/level2 (manifest + R3, R4, R7, R13
+and R14, level_2) are the same data cut down to the record types their level requires (LEVEL_PACKAGES);
+both pass. demo/defects is the clean package with the deliberate defects listed in DEFECTS (and in
+demo/README.md). The output is byte-for-byte reproducible. The 1.0 package that earlier releases of
+this script wrote is kept unchanged under tests/fixtures/clean_1_0.
 """
 import copy
 import hashlib
@@ -25,12 +30,25 @@ SCOPE = "demo-brand"                      # player_ref_scope
 CET, UTC = timezone(timedelta(hours=1)), timezone.utc
 USDT_EUR = D("0.92")                      # reporting-currency rate for USDT-ERC20, and the account rate
 ATTESTATION = "ATT-2026-11-VASP-01"
+SPORTS, CASINO = "GRS-2026-11-XJ-DEMO-0001-SPORTS-ONLINE-EUR", "GRS-2026-11-XJ-DEMO-0001-CASINO-ONLINE-EUR"
+VENUE, FLOAT, BANKING = "V-DEMO-01", "L-VENUE-01-FLOAT", "M-2026-11-0005"   # the venue, its cage float, its drop banking
+FLOOR = f"GRS-2026-11-XJ-DEMO-0001-CASINO-FLOOR-{VENUE}-EUR"                 # the venue line of R13
 
 FILES = {"R1": "R1_funds_locations.jsonl", "R2": "R2_payment_instrument_links.jsonl",
          "R3": "R3_deposits.jsonl", "R4": "R4_withdrawals.jsonl", "R5": "R5_check_decisions.jsonl",
          "R6": "R6_internal_movements.jsonl", "R7": "R7_reconciliation_statements.jsonl",
          "R8": "R8_exceptions.jsonl", "R9": "R9_incidents.jsonl", "R10": "R10_provider_register.jsonl",
-         "R11": "R11_provider_attestations.jsonl", "R12": "R12_report_references.jsonl"}
+         "R11": "R11_provider_attestations.jsonl", "R12": "R12_report_references.jsonl",
+         "R13": "R13_gaming_revenue_statements.jsonl", "R14": "R14_venue_counts.jsonl"}
+
+# The core fields of an R13 statement, first in every statement (§4.13); the conditional and optional fields follow.
+R13_CORE = ("statement_id", "statement_kind", "licence_ref", "product_line", "channel", "period_start", "period_end",
+            "currency", "stakes_basis", "winnings_basis", "stakes_cash", "stakes_refunded", "winnings_cash",
+            "ggr_declared", "ggr_formula", "prepared_by", "reviewed_by", "evidence_ref")
+
+# The level packages (§10): directory -> (conformance level declared, record types the level requires, which the
+# package carries). R14 is required at level_2 because the clean R13 has a venue line; level_1 needs R13 alone.
+LEVEL_PACKAGES = {"level1": ("level_1", ("R13",)), "level2": ("level_2", ("R3", "R4", "R7", "R13", "R14"))}
 
 # Rail -> provider, funds location, rail reference type, currency, time zone, R5 check performed before money moves.
 RAILS = {
@@ -75,6 +93,10 @@ DEFECTS = [   # check id, what was done; applied to demo/defects only
     ("REF-02", "W-2026-11-0002 refers to check decision C-2026-11-9999, which is not in R5"),
     ("REF-03", "D-2026-11-0006 uses instrument I-BANK-9999, which is not in R2"),
     ("REF-04", "D-2026-11-0013 books the acquirer reference of D-2026-11-0003 a second time"),
+    ("REF-09", f"{SPORTS} period_end moved to 2026-12-01T23:59:59+01:00, after the manifest period ends"),
+    ("REF-10", f"{CASINO}-C1, a correction added, names the sports statement as the statement it replaces"),
+    ("REF-12", f"{SPORTS} cites report reference RR-2026-11-9999 for the authority's figure, which is not in R12"),
+    ("REF-13", f"{CASINO} declares ggr 150.00 where its cash_only formula gives 140.00"),
 ]
 
 
@@ -118,8 +140,9 @@ def providers():
 
 
 def locations():
-    def location(lid, ltype, purpose, provider, masked, ccy, protection, custody, **extra):
-        return {"location_id": lid, "location_type": ltype, "purpose_class": purpose, "provider_id": provider,
+    def location(lid, ltype, purpose, provider, masked, ccy, protection, custody, venue=None, **extra):
+        return {"location_id": lid, **({"venue_id": venue} if venue else {}), "location_type": ltype,
+                "purpose_class": purpose, **({"provider_id": provider} if provider else {}),
                 "identifier_masked": masked, "currency_or_asset": ccy, "protection_mechanism": protection,
                 "custody_model": custody, "controlling_entity": OPERATOR, "location_jurisdiction": "XJ",
                 "opened_at": "2026-01-05T09:00:00+01:00", "ownership_evidence_ref": f"DOC-OWN-{lid}", **extra}
@@ -135,6 +158,8 @@ def locations():
         location("L-VASP-01-POOL", "crypto_wallet", "player_funds", "VASP-01", "Pooled account VASP-01/****", "USDT-ERC20",
                  "segregated_account", "omnibus_at_provider", chain="ethereum", temperature="hot",
                  key_control_model="provider_managed"),
+        location(FLOAT, "cash_float", "operational", None, f"Cage float, venue {VENUE}", "EUR", "none", "direct",
+                 venue=VENUE),
     ]
 
 
@@ -282,6 +307,8 @@ def movements(deps, wds):
                  "350.00", "EUR", 24, "head_of_payments", crosses=True, justification_ref="GGR-2026-11"),
         movement(4, "liquidity", {"source_provider_id": "VASP-01"}, {"destination_location_id": "L-VASP-01-POOL"},
                  "1000.000000", "USDT-ERC20", 2, "treasury_manager", ref="VASP01-TRF-000044"),
+        movement(5, "sweep", {"source_location_id": FLOAT}, {"destination_location_id": "L-BANK-OPS-01"},
+                 "1213.00", "EUR", 16, "venue_controller", ref="BANK-01-CIT-20261116-0005"),   # the count of 14 November
     ]
 
 
@@ -332,11 +359,76 @@ def others(deps):
                    "signed_at": "2026-12-03T10:00:00Z", "evidence_ref": "ATT-VASP-01-2026-11.pdf"}
     report = {"report_reference_id": "RR-2026-11-0001", "report_type": "tax_remittance",
               "destination_authority": "Example Revenue Service (fictional)", "channel": "other",
-              "channel_name": "XJ revenue e-filing (fictional)", "profile_rule_ref": "XJ-EXAMPLE@1.0.0#tax-excise-deposit",
+              "channel_name": "XJ revenue e-filing (fictional)", "profile_rule_ref": "XJ-EXAMPLE@1.1.0#tax-excise-deposit",
               "related_record_ids": [r["tx_id"] for r in deps if r["rail"] == "mobile_money"],
               "deadline_at": "2026-12-10T23:59:59+01:00", "filed_at": "2026-12-04T10:00:00+01:00",
               "receipt_ref": "XJ-RS-ACK-000118"}
-    return [exception], [incident], [attestation], [report]
+    levy_return = {"report_reference_id": "RR-2026-11-0002", "report_type": "levy_return",
+                   "destination_authority": "Example Revenue Service (fictional)", "channel": "other",
+                   "channel_name": "XJ revenue e-filing (fictional)", "profile_rule_ref": "XJ-EXAMPLE@1.1.0#levy-return-monthly",
+                   "related_record_ids": [SPORTS, CASINO], "deadline_at": "2026-12-15T23:59:59+01:00",
+                   "filed_at": "2026-12-05T09:30:00+01:00", "receipt_ref": "XJ-RS-ACK-000142"}
+    return [exception], [incident], [attestation], [report, levy_return]
+
+
+# ------------------------------------------------------------------ gaming revenue and venue counts: R13, R14
+
+def revenue():
+    """Three lines for the month, each with the core fields of §4.13 first. Two online lines: sports, all_in,
+    (4800 + 320 - 60) - (4590 + 260) = 210.00; casino, cash_only, 2950 - 0 - 2810 = 140.00, its bonus play carried
+    but outside the formula. Their GGR, 350.00, is the amount swept to the operational account by M-2026-11-0003
+    (justification GGR-2026-11). The third is the venue line of VENUE: cash_only, 48360 - 0 - 32240 = 16120.00,
+    the month's win on the floor, of which the count of 14 November (R14) shows one gaming day."""
+    def line(statement_id, product_line, channel, basis, stakes, refunded, winnings, ggr, formula, evidence, **rest):
+        return {"statement_id": statement_id, "statement_kind": "period", "licence_ref": "XJ/DEMO/0001",
+                "product_line": product_line, "channel": channel, "period_start": PERIOD_START,
+                "period_end": PERIOD_END, "currency": "EUR", "stakes_basis": "placed", "winnings_basis": basis,
+                "stakes_cash": stakes, "stakes_refunded": refunded, "winnings_cash": winnings,
+                "ggr_declared": ggr, "ggr_formula": formula, "prepared_by": "finance_ops",
+                "reviewed_by": "compliance_officer", "evidence_ref": evidence, **rest}
+    return [
+        line(SPORTS, "SPORTS-PREMATCH-LIVE", "online", "paid", "4800.00", "60.00", "4590.00", "210.00", "all_in",
+             "RPT-PLATFORM-GGR-2026-11-SPORTS", jurisdiction_category="betting",
+             stakes_bonus="320.00", winnings_bonus="260.00", bonus_granted="150.00", bonus_expired="20.00",
+             bonus_measurement="per_round", open_liability_start="60.00", open_liability_end="85.00",
+             bets_count=1240, active_players=8,
+             levy_base_declared="210.00", levy_rate="0.20", levy_amount_declared="42.00",
+             authority_figure_ref={"report_reference_id": "RR-2026-11-0002", "figure": "ggr", "amount": "210.00"}),
+        line(CASINO, "CASINO-SLOTS", "online", "credited", "2950.00", "0.00", "2810.00", "140.00", "cash_only",
+             "RPT-PLATFORM-GGR-2026-11-CASINO", jurisdiction_category="casino_games",
+             stakes_bonus="180.00", winnings_bonus="165.00", bonus_granted="120.00", bonus_expired="15.00",
+             bonus_measurement="allocated_from_wallet_totals", rounds_count=5320, active_players=6,
+             levy_base_declared="140.00", levy_rate="0.20", levy_amount_declared="28.00"),
+        line(FLOOR, "CASINO-FLOOR", "venue", "paid", "48360.00", "0.00", "32240.00", "16120.00", "cash_only",
+             f"RPT-VENUE-WIN-2026-11-{VENUE}", jurisdiction_category="casino_games", venue_id=VENUE,
+             levy_base_declared="16120.00", levy_rate="0.20", levy_amount_declared="3224.00"),
+    ]
+
+
+def counts():
+    """The count of one gaming day at the venue whose cage float is the R1 location FLOAT: a slot machine
+    (win by meters: 865 in - 741 out - 50 hand paid - 0 cancelled = 74.00), a table (2890 + 400 + 942 - 2500
+    - 1000 = 732.00) and the venue total (count room 12.00 + 1201.00 against a drop of 273.00 + 942.00 by
+    the units: variance -2.00; win 806.00). The counted drop, 1213.00, is banked by BANKING."""
+    def row(unit_type, unit_id, source, prepared_by, **fields):
+        return {"count_id": f"VC-2026-11-14-{VENUE}-{unit_id if unit_type != 'venue_total' else 'TOTAL'}",
+                "venue_id": VENUE, "gaming_day": "2026-11-14", "unit_type": unit_type, "unit_id": unit_id,
+                "currency": "EUR", "meter_source": source, **fields, "drop_deposit_ref": BANKING,
+                "prepared_by": prepared_by, "reviewed_by": "venue_controller"}
+    meters = {"coin_in": "184256.00", "coin_out": "170123.00", "jackpots_hand_paid": "3240.00",
+              "cancelled_credits": "512.00", "bill_in": "61230.00", "ticket_in": "8821.00", "ticket_out": "40512.00",
+              "games_played": 221045}
+    meters_end = {**meters, "coin_in": "185121.00", "coin_out": "170864.00", "jackpots_hand_paid": "3290.00",
+                  "bill_in": "61445.00", "ticket_in": "8879.00", "ticket_out": "40688.00", "games_played": 221489}
+    return [
+        row("slot_machine", "SM-0001", "electronic", "slot_operations", meters_start=meters, meters_end=meters_end,
+            win_declared="74.00", win_formula="slot_meter_formula"),
+        row("table", "T-01", "manual_read", "table_games_supervisor", opening_inventory="2500.00",
+            closing_inventory="2890.00", fills="1000.00", credits="400.00", drop_cash="942.00", drop_markers="0.00",
+            win_declared="732.00", win_formula="table_drop_formula"),
+        row("venue_total", VENUE, "electronic", "count_room", hard_count="12.00", soft_count="1201.00",
+            count_variance="-2.00", win_declared="806.00", win_formula="profile"),
+    ]
 
 
 def records():
@@ -344,7 +436,8 @@ def records():
     movs = movements(deps, wds)
     r8, r9, r11, r12 = others(deps)
     return {"R1": locations(), "R2": instruments(), "R3": deps, "R4": wds, "R5": checks, "R6": movs,
-            "R7": statements(deps, wds, movs), "R8": r8, "R9": r9, "R10": providers(), "R11": r11, "R12": r12}
+            "R7": statements(deps, wds, movs), "R8": r8, "R9": r9, "R10": providers(), "R11": r11, "R12": r12,
+            "R13": revenue(), "R14": counts()}
 
 
 def apply_defects(recs):
@@ -357,26 +450,42 @@ def apply_defects(recs):
     twice = copy.deepcopy(find("R3", "tx_id", "D-2026-11-0003"))                       # REF-04
     twice.update({"tx_id": "D-2026-11-0013", "ledger_entry_ref": "LE-D-2026-11-0013"})
     recs["R3"].append(twice)
+    sports, casino = find("R13", "statement_id", SPORTS), find("R13", "statement_id", CASINO)
+    restated = copy.deepcopy(casino)                                                  # REF-10: a correction
+    restated.update({"statement_id": f"{CASINO}-C1", "statement_kind": "correction", "winnings_cash": "2822.00",
+                     "ggr_declared": "128.00", "evidence_ref": "RPT-PLATFORM-GGR-2026-11-CASINO-C1",
+                     "levy_base_declared": "128.00", "levy_amount_declared": "25.60"})
+    correction = {**{k: restated[k] for k in R13_CORE},                               # core first, as in §4.13
+                  "corrects_statement_id": SPORTS, "correction_reason": "Void after settlement: 14 rounds settled on "
+                  "2026-11-29 were voided on 2026-12-03 after the period statement was filed; winnings_cash is restated.",
+                  **{k: v for k, v in restated.items() if k not in R13_CORE}}
+    recs["R13"].append(correction)
+    sports["period_end"] = "2026-12-01T23:59:59+01:00"                                 # REF-09
+    sports["authority_figure_ref"]["report_reference_id"] = "RR-2026-11-9999"          # REF-12
+    casino["ggr_declared"] = "150.00"                                                  # REF-13
 
 
 # ------------------------------------------------------------------ writing
 
-def write(out, recs, package_id, tamper=None):
+def write(out, recs, package_id, level, tamper=None):
+    """Write one file per record type in recs, in R1 to R14 order, sealed in a manifest that declares level."""
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     entries = []
     for rtype, name in FILES.items():
+        if rtype not in recs:
+            continue
         text = "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in recs[rtype])
         (out / name).write_text(text, encoding="utf-8")
         entries.append({"file": name, "record_type": rtype, "record_count": len(recs[rtype]), "sha256": sha(text)})
-    manifest = {"standard": "CTRES", "standard_version": "1.0", "package_id": package_id,
+    manifest = {"standard": "CTRES", "standard_version": "1.1", "package_id": package_id,
                 "licence_number": "XJ/DEMO/0001", "licensing_authority": AUTHORITY, "licensee": OPERATOR,
-                "profile_id": "XJ-EXAMPLE", "profile_version": "1.0.0", "period_start": PERIOD_START,
+                "profile_id": "XJ-EXAMPLE", "profile_version": "1.1.0", "period_start": PERIOD_START,
                 "period_end": PERIOD_END, "submission_mode": "periodic_package", "reporting_currency": "EUR",
-                "conformance_level_declared": "level_2", "records_start_date": "2026-01-05", "files": entries,
+                "conformance_level_declared": level, "records_start_date": "2026-01-05", "files": entries,
                 "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
-                "generating_software_version": "1.0.0", "synthetic": True}
+                "generating_software_version": "1.1.0", "synthetic": True}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if tamper:                                     # STR-02: a file altered after the manifest was sealed
         name, old, new = tamper
@@ -388,14 +497,17 @@ def write(out, recs, package_id, tamper=None):
 
 def build(out_dir):
     out_dir = Path(out_dir)
-    write(out_dir / "clean", records(), "PKG-XJ-DEMO-0001-2026-11")
+    recs = records()
+    write(out_dir / "clean", recs, "PKG-XJ-DEMO-0001-2026-11", "level_4")
+    for name, (level, types) in LEVEL_PACKAGES.items():
+        write(out_dir / name, {t: recs[t] for t in types}, f"PKG-XJ-DEMO-0001-2026-11-{name.upper()}", level)
     defective = records()
     apply_defects(defective)
-    write(out_dir / "defects", defective, "PKG-XJ-DEMO-0001-2026-11-DEFECTS",
+    write(out_dir / "defects", defective, "PKG-XJ-DEMO-0001-2026-11-DEFECTS", "level_4",
           tamper=("R6_internal_movements.jsonl", '"amount":"350.00"', '"amount":"3500.00"'))
 
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "demo"
     build(target)
-    print(f"wrote {target / 'clean'} and {target / 'defects'}")
+    print(f"wrote {target / 'clean'}, {target / 'level1'}, {target / 'level2'} and {target / 'defects'}")

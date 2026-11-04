@@ -8,8 +8,8 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__
-from .validator import SchemaError, validate
+from . import STANDARD_VERSION, __version__
+from .validator import LEVELS, SchemaError, validate
 
 SHOWN = 20          # findings printed per check in the text report; --json carries all of them
 
@@ -17,7 +17,7 @@ SHOWN = 20          # findings printed per check in the text report; --json carr
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="ctres-validate",
-        description="Structural and Referential validation (CTRES v1.0, §11) of a CTRES package directory.",
+        description=f"Structural and Referential validation (CTRES v{STANDARD_VERSION}, §11) of a CTRES package directory.",
         epilog="Exit status: 0 no blocking findings, 1 blocking findings, 2 usage error or validation not completed.")
     parser.add_argument("package_dir", help="directory holding manifest.json and the JSON Lines record files")
     parser.add_argument("--json", action="store_true", help="write the result as JSON to standard output")
@@ -58,7 +58,8 @@ def main(argv=None):
 
 def print_report(res):
     m = res["manifest"] or {}
-    print(f"CTRES validator-lite {res['validator_version']}: Structural and Referential validation (CTRES v1.0, §11)")
+    print(f"CTRES validator-lite {res['validator_version']}: Structural and Referential validation "
+          f"(CTRES v{STANDARD_VERSION}, §11)")
     print(f"package      {res['package']}")
     if m:
         print(f"package id   {m.get('package_id')}")
@@ -78,7 +79,11 @@ def print_report(res):
         for c in checks:
             if c["status"] == "fail":
                 n = len(c["findings"])
-                print(f"  {c['id']}  FAIL  {c['severity']:<8}  {n} finding{'s' * (n != 1)}  {c['failure']} ({c['basis']})")
+                blocking = sum(f["severity"] == "blocking" for f in c["findings"])
+                # A blocking check whose findings are all advisory (references not resolved by level) reads as advisory.
+                severity = "blocking" if blocking else "advisory"
+                count = f"{n} finding{'s' * (n != 1)}" + (f" ({n - blocking} advisory)" if 0 < blocking < n else "")
+                print(f"  {c['id']}  FAIL  {severity:<8}  {count}  {c['failure']} ({c['basis']})")
                 for f in c["findings"][:SHOWN]:
                     where = f"{f['file']} line {f['line']}" if f["line"] else f["file"]
                     prefix = "" if not where or f["detail"].startswith(f["file"]) else where + ": "
@@ -92,5 +97,17 @@ def print_report(res):
 
     s = res["summary"]
     verdict = "PASS: no blocking findings" if res["result"] == "pass" else f"FAIL: {s['blocking_findings']} blocking findings"
-    print(f"\nResult: {verdict}, {s['advisory_findings']} advisory.")
+    print(f"\nResult: {verdict}, {s['advisory_findings']} advisory; {level_text(m)}.")
     print(f"Not checked by validator-lite: {res['not_checked']}")
+
+
+def level_text(m):
+    """The conformance level the manifest declares (§10), for the summary line."""
+    declared = m.get("conformance_level_declared")
+    if declared is None:
+        return "level not declared"
+    if m.get("standard_version") == "1.1" and declared in LEVELS:
+        return f"declared {declared} ({LEVELS[declared][0]})"
+    if m.get("standard_version") == "1.0":
+        return f"declared {declared} (a delivery level of CTRES v1.0, not tested)"
+    return f"declared {declared!r}, which is not a level of §10"

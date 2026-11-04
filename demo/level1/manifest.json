@@ -1,0 +1,27 @@
+{
+  "standard": "CTRES",
+  "standard_version": "1.1",
+  "package_id": "PKG-XJ-DEMO-0001-2026-11-LEVEL1",
+  "licence_number": "XJ/DEMO/0001",
+  "licensing_authority": "Example Gambling Authority (fictional)",
+  "licensee": "Example Operator Ltd (SYNTHETIC)",
+  "profile_id": "XJ-EXAMPLE",
+  "profile_version": "1.1.0",
+  "period_start": "2026-11-01T00:00:00+01:00",
+  "period_end": "2026-11-30T23:59:59+01:00",
+  "submission_mode": "periodic_package",
+  "reporting_currency": "EUR",
+  "conformance_level_declared": "level_1",
+  "records_start_date": "2026-01-05",
+  "files": [
+    {
+      "file": "R13_gaming_revenue_statements.jsonl",
+      "record_type": "R13",
+      "record_count": 3,
+      "sha256": "f507befd8f23adc85323ca2da7d24d01e3b70dd9d17024dcbad0e3434b1f8acb"
+    }
+  ],
+  "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
+  "generating_software_version": "1.1.0",
+  "synthetic": true
+}

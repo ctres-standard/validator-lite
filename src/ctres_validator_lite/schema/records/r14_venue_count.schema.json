@@ -1,0 +1,441 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.1/records/r14_venue_count.schema.json",
+  "title": "CTRES v1.1 R14 Venue Count",
+  "description": "What the floor counted (§4.14): one row per venue, unit and gaming day, or per period where the profile permits. A unit is a slot machine, whose row carries the meter readings at the start and the end, or the drop where no meter exists; a table or a counter, whose row carries inventories, fills, credits and drop; or the venue total, whose row carries the count-room totals against the units. Venue rows feed the venue line of R13 and reconcile the drop to the cash float in R1 and the banking movement in R6 (§4.13; §4.1; §4.6).",
+  "type": "object",
+  "properties": {
+    "count_id": {
+      "description": "Count identifier (§4.14).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "venue_id": {
+      "description": "Identifier of the venue, as carried by venue_id on the venue's R1 cash_float location (§4.14; §4.1).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "gaming_day": {
+      "description": "The gaming day counted (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Unless the profile permits a count per period, given as period_start and period_end; a row carries either gaming_day or the period, never both (§4.14; §5 Revenue and levy).",
+      "$ref": "../common.schema.json#/$defs/date"
+    },
+    "period_start": {
+      "description": "Start of the period counted (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile permits a count per period rather than per gaming day; not used with gaming_day (§4.14; §5 Revenue and levy).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the period counted (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile permits a count per period rather than per gaming day; not used with gaming_day (§4.14; §5 Revenue and levy).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "unit_type": {
+      "description": "Kind of unit: a slot machine, a gaming table, a counter or cash desk, or the venue total (§4.14).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "slot_machine",
+        "table",
+        "counter",
+        "venue_total"
+      ]
+    },
+    "unit_id": {
+      "description": "Identifier of the unit: the machine or table number, the counter, or the venue itself on a venue_total row (§4.14).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "currency": {
+      "description": "Currency in which the amounts of the row are stated (§4.14; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_code"
+    },
+    "meter_source": {
+      "description": "How the readings of the row were taken: electronic, from a monitoring or casino management system; manual_read, from a manual meter reading or from opener and closer slips; or not_recorded where the source left no record (§4.14; §3 Visible gaps).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "electronic",
+        "manual_read",
+        "not_recorded"
+      ]
+    },
+    "meters_start": {
+      "description": "Meter readings at the start of the gaming day or period (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is slot_machine, unless meter_source is not_recorded; not used on other rows (§4.14; §3 Visible gaps).",
+      "$ref": "#/$defs/slot_meters"
+    },
+    "meters_end": {
+      "description": "Meter readings at the end of the gaming day or period (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is slot_machine, unless meter_source is not_recorded; not used on other rows (§4.14; §3 Visible gaps).",
+      "$ref": "#/$defs/slot_meters"
+    },
+    "opening_inventory": {
+      "description": "Chips and cash at the unit at the start, from the opener (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is table or counter (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "closing_inventory": {
+      "description": "Chips and cash at the unit at the end, from the closer (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is table or counter (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "fills": {
+      "description": "Chips brought to the unit from the cage (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is table; on counter rows where fills apply; and on slot_machine rows where win_formula is slot_drop_formula (drop, less fills and hand-paid jackpots) (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "credits": {
+      "description": "Chips returned from the unit to the cage (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is table; on counter rows where credits apply (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "drop_cash": {
+      "description": "Cash in the drop box (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is table; on counter rows where a drop applies; on slot_machine rows where win_formula is slot_drop_formula (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "drop_markers": {
+      "description": "Markers and other credit instruments in the drop box (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Table and counter rows where markers or credit are extended (§4.14; §5 Revenue and levy notes chargebacks_and_bad_debts).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "coupons_face_value": {
+      "description": "Face value of coupons and promotional chips in the drop box (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Table and counter rows where coupons or promotional chips go through the drop and the profile counts their face value (§4.14; §5 Revenue and levy notes land_based).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "hard_count": {
+      "description": "Count-room total of coin and tokens (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is venue_total; not used on other rows (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "soft_count": {
+      "description": "Count-room total of notes, tickets and vouchers (§4.14).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is venue_total; not used on other rows (§4.14).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "count_variance": {
+      "description": "Count-room totals less the drop the units' meters and drop boxes state, stated rather than hidden (§4.14; §4.7).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where unit_type is venue_total; not used on other rows (§4.14).",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "tips_excluded": {
+      "description": "Tips and gratuities taken out of the drop before the win is computed (§4.14; §5 Revenue and levy notes land_based).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "win_declared": {
+      "description": "The unit's win for the day or period; negative where the unit lost (§4.14).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "win_formula": {
+      "description": "Formula applied: table_drop_formula (closing inventory plus credits plus drop, less opening inventory and fills), slot_meter_formula (metered in, less metered out, hand-paid jackpots, cancelled credits and progressive payouts), slot_drop_formula (drop, less fills and hand-paid jackpots), or profile (the formula the profile defines). A table row names table_drop_formula or profile; a slot_machine row names slot_meter_formula, slot_drop_formula or profile; a counter or venue_total row names any of the four (§4.14; §5 Revenue and levy levy_formula venue_win_formulas).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "table_drop_formula",
+        "slot_meter_formula",
+        "slot_drop_formula",
+        "profile"
+      ]
+    },
+    "drop_deposit_ref": {
+      "description": "The R6 movement or the R1 cash_float location the drop was banked to (§4.14; §4.6; §4.1).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "prepared_by": {
+      "description": "Who prepared the count, as in R7 (§4.14; §4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "reviewed_by": {
+      "description": "Who reviewed the count, as in R7 (§4.14; §4.7).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier_or_not_recorded"
+    }
+  },
+  "required": [
+    "count_id",
+    "venue_id",
+    "unit_type",
+    "unit_id",
+    "currency",
+    "meter_source",
+    "win_declared",
+    "win_formula",
+    "prepared_by",
+    "reviewed_by"
+  ],
+  "oneOf": [
+    {
+      "required": [
+        "gaming_day"
+      ],
+      "properties": {
+        "period_start": false,
+        "period_end": false
+      }
+    },
+    {
+      "required": [
+        "period_start",
+        "period_end"
+      ],
+      "properties": {
+        "gaming_day": false
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "unit_type": {
+            "const": "slot_machine"
+          }
+        },
+        "required": [
+          "unit_type"
+        ]
+      },
+      "then": {
+        "if": {
+          "properties": {
+            "meter_source": {
+              "const": "not_recorded"
+            }
+          },
+          "required": [
+            "meter_source"
+          ]
+        },
+        "else": {
+          "required": [
+            "meters_start",
+            "meters_end"
+          ]
+        },
+        "properties": {
+          "win_formula": {
+            "enum": [
+              "slot_meter_formula",
+              "slot_drop_formula",
+              "profile"
+            ]
+          },
+          "hard_count": false,
+          "soft_count": false,
+          "count_variance": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "unit_type": {
+            "const": "slot_machine"
+          },
+          "win_formula": {
+            "const": "slot_drop_formula"
+          }
+        },
+        "required": [
+          "unit_type",
+          "win_formula"
+        ]
+      },
+      "then": {
+        "required": [
+          "drop_cash",
+          "fills"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "unit_type": {
+            "const": "table"
+          }
+        },
+        "required": [
+          "unit_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "opening_inventory",
+          "closing_inventory",
+          "fills",
+          "credits",
+          "drop_cash"
+        ],
+        "properties": {
+          "win_formula": {
+            "enum": [
+              "table_drop_formula",
+              "profile"
+            ]
+          },
+          "meters_start": false,
+          "meters_end": false,
+          "hard_count": false,
+          "soft_count": false,
+          "count_variance": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "unit_type": {
+            "const": "counter"
+          }
+        },
+        "required": [
+          "unit_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "opening_inventory",
+          "closing_inventory"
+        ],
+        "properties": {
+          "meters_start": false,
+          "meters_end": false,
+          "hard_count": false,
+          "soft_count": false,
+          "count_variance": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "unit_type": {
+            "const": "venue_total"
+          }
+        },
+        "required": [
+          "unit_type"
+        ]
+      },
+      "then": {
+        "required": [
+          "hard_count",
+          "soft_count",
+          "count_variance"
+        ],
+        "properties": {
+          "meters_start": false,
+          "meters_end": false
+        }
+      }
+    }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "slot_meters": {
+      "description": "The meter set of a slot machine, the GLI-11 §3.9.7 set, read at the start and at the end of the gaming day or period (§4.14). Money meters are cumulative amounts in the currency of the row; games_played is a cumulative count. A meter the machine does not have is omitted.",
+      "type": "object",
+      "properties": {
+        "coin_in": {
+          "description": "Total amount wagered (§4.14).",
+          "x-ctres-req": "M",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "coin_out": {
+          "description": "Total amount paid out by the machine, excluding hand-paid jackpots (§4.14).",
+          "x-ctres-req": "M",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "jackpots_hand_paid": {
+          "description": "Jackpots paid by hand (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "cancelled_credits": {
+          "description": "Credits cancelled and paid by hand (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "progressive_payouts_machine_paid": {
+          "description": "Progressive jackpot payouts paid by the machine (§4.14; GLI-11 §3.9.7).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "progressive_payouts_attendant_paid": {
+          "description": "Progressive jackpot payouts paid by an attendant (§4.14; GLI-11 §3.9.7).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "bill_in": {
+          "description": "Notes accepted (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "ticket_in": {
+          "description": "Tickets accepted (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "ticket_out": {
+          "description": "Tickets issued (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "promo_in": {
+          "description": "Promotional credits accepted (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "promo_out": {
+          "description": "Promotional credits issued (§4.14).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "wat_in": {
+          "description": "Cashless (wagering-account) transfers in to the machine (§4.14; GLI-11 §3.9.7).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "wat_out": {
+          "description": "Cashless (wagering-account) transfers out of the machine (§4.14; GLI-11 §3.9.7).",
+          "x-ctres-req": "O",
+          "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+        },
+        "games_played": {
+          "description": "Number of games played (§4.14).",
+          "x-ctres-req": "O",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "coin_in",
+        "coin_out"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

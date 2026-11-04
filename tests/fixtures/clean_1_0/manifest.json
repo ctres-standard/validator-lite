@@ -1,0 +1,93 @@
+{
+  "standard": "CTRES",
+  "standard_version": "1.0",
+  "package_id": "PKG-XJ-DEMO-0001-2026-11",
+  "licence_number": "XJ/DEMO/0001",
+  "licensing_authority": "Example Gambling Authority (fictional)",
+  "licensee": "Example Operator Ltd (SYNTHETIC)",
+  "profile_id": "XJ-EXAMPLE",
+  "profile_version": "1.0.0",
+  "period_start": "2026-11-01T00:00:00+01:00",
+  "period_end": "2026-11-30T23:59:59+01:00",
+  "submission_mode": "periodic_package",
+  "reporting_currency": "EUR",
+  "conformance_level_declared": "level_2",
+  "records_start_date": "2026-01-05",
+  "files": [
+    {
+      "file": "R1_funds_locations.jsonl",
+      "record_type": "R1",
+      "record_count": 5,
+      "sha256": "3e07d82cda77d731c1992d150538d78afe1ccb430187e983c6840944e895c860"
+    },
+    {
+      "file": "R2_payment_instrument_links.jsonl",
+      "record_type": "R2",
+      "record_count": 8,
+      "sha256": "c7e5d03d2ec4b9d0cbf205e4ba65234ce8869a78fa3dade98edcf88b12b22fbf"
+    },
+    {
+      "file": "R3_deposits.jsonl",
+      "record_type": "R3",
+      "record_count": 12,
+      "sha256": "ab14bbd83dd68eeb5039ec7d9f9445a486a87747f5427a1ed1367a2a68bf4b58"
+    },
+    {
+      "file": "R4_withdrawals.jsonl",
+      "record_type": "R4",
+      "record_count": 6,
+      "sha256": "7571c096dc23772a43dcc6738bcf22c73da3f2f410892dcb50398ada41d7c942"
+    },
+    {
+      "file": "R5_check_decisions.jsonl",
+      "record_type": "R5",
+      "record_count": 20,
+      "sha256": "1e74c31715f37c8581ee51cc5ffc2ad8d539888fb9c66c5cd99267e2d91f56f0"
+    },
+    {
+      "file": "R6_internal_movements.jsonl",
+      "record_type": "R6",
+      "record_count": 4,
+      "sha256": "a38ae877ab4e76ea83a579c05b57c7c3fdebc1f834ed673fadacf0a998ca24d5"
+    },
+    {
+      "file": "R7_reconciliation_statements.jsonl",
+      "record_type": "R7",
+      "record_count": 2,
+      "sha256": "c76db4ee9429b14940c01c89ff98041eb7ae6cf38e5bdda32ccba4fb384f5ced"
+    },
+    {
+      "file": "R8_exceptions.jsonl",
+      "record_type": "R8",
+      "record_count": 1,
+      "sha256": "b221b23d54105cf7b7e9ce1d540a2b0035f21ce3c5f03a104c715fb64e6c7fd0"
+    },
+    {
+      "file": "R9_incidents.jsonl",
+      "record_type": "R9",
+      "record_count": 1,
+      "sha256": "5ee10faa8ecec32be29358859bb82408e49612d5bd59cb8bcf6b55998373f17d"
+    },
+    {
+      "file": "R10_provider_register.jsonl",
+      "record_type": "R10",
+      "record_count": 4,
+      "sha256": "1dea49c715af3d4b03a7ace2381e7079c89933acd5b40edf0d01df04dc3494c2"
+    },
+    {
+      "file": "R11_provider_attestations.jsonl",
+      "record_type": "R11",
+      "record_count": 1,
+      "sha256": "07701f82333a4ac4e65cca018e132ef904a44af262a2e4162f8e625b22473615"
+    },
+    {
+      "file": "R12_report_references.jsonl",
+      "record_type": "R12",
+      "record_count": 1,
+      "sha256": "5b45790d7a2c05975e4958be868f8c527c710fcc910de8867dee396b657ff969"
+    }
+  ],
+  "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
+  "generating_software_version": "1.0.0",
+  "synthetic": true
+}

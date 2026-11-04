@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r08_exception.schema.json",
-  "title": "CTRES v1.0 R8 Exception",
+  "$id": "https://ctres.org/schema/1.1/records/r08_exception.schema.json",
+  "title": "CTRES v1.1 R8 Exception",
   "description": "Anything the operator could not explain, in a common vocabulary, with a value, an age and an owner (§4.8).",
   "type": "object",
   "properties": {

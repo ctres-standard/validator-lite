@@ -1,11 +1,14 @@
 """
-CTRES validator-lite: the Structural and Referential classes of validation (CTRES v1.0, §11).
+CTRES validator-lite: the Structural and Referential classes of validation (CTRES v1.1, §11).
 
 A package is a directory holding manifest.json and one JSON Lines file per record type (§8.2).
 Each check has an identifier, a class, a severity and the section of the Standard it rests on, so
 that any finding can be traced and argued. Profile conformance, completeness and the agreement of
-statement totals with the records behind them are not checked here: they depend on profile
-parameters, tolerances and materiality, and belong to the CTRES conformance suite.
+statement totals with the records behind them (including the money bridge of §4.13) are not checked
+here: they depend on profile parameters, tolerances and materiality, and belong to the CTRES
+conformance suite. Where the manifest declares a conformance level (§10), the record types the level requires
+must be present (STR-09), and a reference to a record type the level does not require and the package does not
+carry is reported as advisory rather than resolved. Packages produced under CTRES v1.0 are validated unchanged.
 
 Import:  from ctres_validator_lite import validate  ->  result dict (see README, "JSON output")
 """
@@ -18,7 +21,8 @@ import json
 import re
 from calendar import isleap
 from collections import namedtuple
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -30,7 +34,7 @@ from . import SCHEMA_VERSION, STANDARD_VERSION, __version__
 SCHEMA_DIR = Path(__file__).resolve().parent / "schema"   # vendored copy of ctres-standard/schema
 CONFORMANCE_SUITE = "https://ctres.org/validator"
 
-# id, class, severity, basis in CTRES v1.0, what the check requires, what a failure means.
+# id, class, severity, basis in CTRES v1.1, what the check requires, what a failure means.
 RULES = [
     ("STR-01", "structural", "blocking", "§8.2",
      "Every file named in the manifest is present in the package",
@@ -57,6 +61,10 @@ RULES = [
     ("STR-08", "structural", "blocking", "§8.2",
      "manifest.json is present and validates against the manifest schema",
      "The manifest is missing, malformed or incomplete"),
+    ("STR-09", "structural", "blocking", "§10; Annex D",
+     "Every record type the declared conformance level requires is listed in the manifest and present; at "
+     "level_2 and above, R14 where any R13 line has channel venue",
+     "Record types the declared conformance level requires are missing from the package"),
 
     ("REF-01", "referential", "blocking", "§4.1; §4.6; §4.7; §4.11",
      "Every funds location referenced by R3, R4, R7 or R11 is in R1; each side of an R6 movement is a "
@@ -86,6 +94,25 @@ RULES = [
      "Every attestation_ref on R3 and R4 resolves to an R11 attestation that covers the transaction's "
      "funds location",
      "Pooled-custody transactions point at no valid provider attestation"),
+    ("REF-09", "referential", "blocking", "§4.13; §4.14; §8.2",
+     "Every R13 statement period, and every R14 gaming day or period, lies within the period stated in the "
+     "manifest",
+     "Revenue statements or venue counts fall outside the reporting period"),
+    ("REF-10", "referential", "blocking", "§4.13",
+     "Every R13 correction's corrects_statement_id names the statement it replaces: another R13 statement of "
+     "the same licence, product line, channel and currency, where the package carries it",
+     "Corrections name themselves, each other, or a statement of another line as the statement they replace"),
+    ("REF-11", "referential", "blocking", "§4.14; §4.1; §4.6",
+     "Every R14 venue_id is carried by an R1 location, and every R14 drop_deposit_ref is an R6 movement or "
+     "an R1 location",
+     "Venue counts cite a venue no R1 location carries, or a drop banking that is in neither R6 nor R1"),
+    ("REF-12", "referential", "blocking", "§4.13; §4.12",
+     "Every authority_figure_ref on an R13 statement cites a report reference in R12",
+     "Statements cite an authority figure whose report reference does not exist"),
+    ("REF-13", "referential", "advisory", "§4.13",
+     "ggr_declared on each R13 statement equals the formula the statement names, all_in or cash_only, applied "
+     "to the statement's own stakes and winnings, exactly",
+     "Statements declare a gross gaming revenue that does not follow their own formula"),
 ]
 
 # Record type -> (schema file under schema/, identifier field).
@@ -102,6 +129,24 @@ RECORDS = {
     "R10": ("records/r10_provider_register.schema.json", "provider_id"),
     "R11": ("records/r11_provider_attestation.schema.json", "attestation_id"),
     "R12": ("records/r12_report_reference.schema.json", "report_reference_id"),
+    "R13": ("records/r13_gaming_revenue_statement.schema.json", "statement_id"),
+    "R14": ("records/r14_venue_count.schema.json", "count_id"),
+}
+
+SEVERITY = {r[0]: r[2] for r in RULES}
+
+# Conformance levels of §10, defined by scope: the name of each level and the record types it requires at
+# minimum. The core is the manifest with R3, R4, R7 and R13; the Custody module (R1, R2, R6, R10, R11) joins at
+# level_3 and the Supervision module (R5, R8, R9, R12) at level_4. Any record type may be included at any level.
+# R14, the Venue module, is required at level_2 and above where an R13 line has channel venue. The levels are
+# those of v1.1: in a package that declares standard_version 1.0, conformance_level_declared keeps its v1.0
+# meaning (a delivery level), so STR-09 is not run and references are resolved as for a package without a level.
+CORE = ("R3", "R4", "R7", "R13")
+LEVELS = {
+    "level_1": ("Return", ("R13",)),
+    "level_2": ("Evidence", CORE),
+    "level_3": ("Custody", CORE + ("R1", "R2", "R6", "R10", "R11")),
+    "level_4": ("Supervision", CORE + ("R1", "R2", "R6", "R10", "R11", "R5", "R8", "R9", "R12")),
 }
 
 # A plain file name, as manifest.schema.json requires. Other names are never opened.
@@ -118,6 +163,21 @@ RELATED_TYPES = ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R10")
 # package by at least one reference that resolves.
 EXTERNAL_CATEGORIES = ("external_movement_without_ledger_entry", "provider_credit_not_booked",
                        "location_outside_inventory")
+
+# The fields that identify the line an R13 statement reports (§4.13): a correction replaces a statement of
+# the same line, for the same licence, product line, channel and currency.
+LINE_FIELDS = ("licence_ref", "product_line", "channel", "currency")
+
+# The two formulas of §4.13 whose terms are fields of the statement itself: the formula in words, the fields
+# added and the fields subtracted. A bonus field the line does not carry counts as zero. The third formula,
+# profile, is the profile's own and is not applied here.
+GGR_FORMULAS = {
+    "all_in": ("(stakes_cash + stakes_bonus - stakes_refunded) - (winnings_cash + winnings_bonus)",
+               ("stakes_cash", "stakes_bonus"), ("stakes_refunded", "winnings_cash", "winnings_bonus")),
+    "cash_only": ("stakes_cash - stakes_refunded - winnings_cash",
+                  ("stakes_cash",), ("stakes_refunded", "winnings_cash")),
+}
+BONUS_FIELDS = ("stakes_bonus", "winnings_bonus")
 
 Rec = namedtuple("Rec", "data file line type")
 
@@ -185,7 +245,7 @@ class Schemas:
         module = (f"transaction_{self.rail_module.get(value('rail'))}" if rtype in ("R3", "R4") else
                   "location_virtual_asset" if rtype == "R1" and value("location_type") == "crypto_wallet" else
                   "check_virtual_asset" if rtype == "R5" and value("check_type") == "blockchain_analytics" else None)
-        allowed = self.fields[rtype] | self.module_fields.get(module, set())
+        allowed = self.fields[rtype] | self.module_fields.get(module, set())     # no module: R2, R6 to R14
         return [k for k in record if k not in allowed]
 
 
@@ -226,6 +286,21 @@ def parse_dt(value):
         return None
 
 
+def parse_date(value):
+    """A calendar date YYYY-MM-DD as a date; None if it is not one."""
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _decimal(value):
+    """A decimal string (§8.2) as a Decimal, exactly; None for anything else."""
+    return Decimal(value) if isinstance(value, str) and re.fullmatch(r"-?\d+(\.\d+)?", value) else None
+
+
 def _path(parts):
     return "/".join(str(p) for p in parts) or None
 
@@ -262,8 +337,11 @@ def describe(err, record):
         field = _path(_find(record, err.instance) or ())
         return field, "field not permitted for this record (excluded by its direction, kind or status)"
     if err.validator in ("anyOf", "oneOf") and all(
-            isinstance(b, dict) and list(b) == ["required"] for b in err.validator_value):
-        names = ", ".join(n for b in err.validator_value for n in b["required"])
+            isinstance(b, dict) and "required" in b and set(b) <= {"required", "properties"}
+            and all(v is False for v in b.get("properties", {}).values()) for b in err.validator_value):
+        # Branches that each require fields and may exclude the others' (the sides of an R6 movement; the
+        # gaming day or the period of an R14 row).
+        names = " or ".join(" and ".join(b["required"]) for b in err.validator_value)
         return field, ("exactly one of " if err.validator == "oneOf" else "at least one of ") + names + " is required"
     if err.validator == "required" and (m := re.match(r"'(.+)' is a required property$", err.message)):
         return _path([*err.absolute_path, m.group(1)]), "required field is missing"
@@ -285,13 +363,15 @@ def validate(package_dir, schema_dir=None):
         value = rec.data.get(RECORDS[rec.type][1])
         return value if isinstance(value, str) else None
 
-    def fail(rule, detail, rec=None, file=None, line=None, field=None):
-        """Record a finding. For a record, its file, line and identifier are taken from it."""
+    def fail(rule, detail, rec=None, file=None, line=None, field=None, severity=None):
+        """Record a finding. For a record, its file, line and identifier are taken from it. A finding carries the
+        severity of its check unless the check downgrades it (a reference not resolved by level, §10)."""
         record = None
         if rec is not None:
             file, line, record = rec.file, rec.line, rid(rec)
             detail = f"{record}: {detail}" if record else detail
-        hits[rule].append({"file": file, "line": line, "record": record, "field": field, "detail": detail})
+        hits[rule].append({"file": file, "line": line, "record": record, "field": field, "detail": detail,
+                           "severity": severity or SEVERITY[rule]})
 
     # ------------------------------------------------------------ manifest
     # STR-08: manifest.json is present, is JSON, and validates against the manifest schema
@@ -447,18 +527,68 @@ def validate(package_dir, schema_dir=None):
         if p.name not in listed and SAFE_FILE.match(p.name) and p.is_file():
             notes["STR-01"].add(f"{p.name} is in the package but not listed in the manifest; it was not read")
 
+    # ------------------------------------------------------------ conformance level
+    # STR-09: the record types the declared level requires are listed in the manifest (that each listed file is
+    # present and readable is STR-01), and R14 where an R13 line is a venue line. The levels are those of §10 of
+    # v1.1; in a 1.0 package the field keeps its v1.0 meaning, and a value outside the enumeration is STR-08.
+    declared, version = manifest.get("conformance_level_declared"), manifest.get("standard_version")
+    level = declared if version == "1.1" and declared in LEVELS else None
+    if level is None:
+        ran["STR-09"] = False
+        if declared is None:
+            why = "the manifest declares no conformance level"
+        elif version == "1.0" and declared in ("level_1", "level_2", "level_3"):
+            why = (f"the package declares standard_version 1.0, under which conformance_level_declared {declared} "
+                   "is a delivery level of v1.0, not a level of §10 of v1.1")
+        elif version not in ("1.0", "1.1"):
+            why = "the manifest's standard_version is not readable (reported by STR-08)"
+        else:
+            why = f"conformance_level_declared {declared!r} is not a level of §10 (reported by STR-08)"
+        notes["STR-09"].add(f"not run: {why}")
+    else:
+        name, required = LEVELS[level]
+        listed_types = {f.get("record_type") for f in entries}
+        for rtype in sorted(required, key=lambda t: int(t[1:])):
+            if rtype not in listed_types:
+                fail("STR-09", f"{rtype} is required at {level} ({name}) but the manifest lists no {rtype} file",
+                     file="manifest.json", field="files")
+        venue_lines = [rid(r) or "a statement without statement_id" for r in data["R13"] if r.data.get("channel") == "venue"]
+        if level != "level_1" and venue_lines and "R14" not in listed_types:
+            fail("STR-09", f"R14 is required at {level} ({name}) because an R13 line has channel venue "
+                 f"({', '.join(venue_lines[:3])}{', ...' if len(venue_lines) > 3 else ''}) but the manifest lists "
+                 "no R14 file", file="manifest.json", field="files")
+
     # ------------------------------------------------------------ referential
     def strings(values):
         return {v for v in values if isinstance(v, str)}
 
     index = {t: strings(r.data.get(RECORDS[t][1]) for r in data[t]) for t in RECORDS}
+    downgraded = set()
+
+    def unresolved(rule, key, rtypes):
+        """A reference to record types the package does not carry. Where a level is declared and it requires none
+        of the absent types, the reference is an identifier in the operator's own systems, present in the record
+        and not resolved within the package (§10): one advisory finding per field and check. Otherwise, as for a
+        package without a level, a note: the package may be partial or sampled (§8.1)."""
+        absent = [t for t in rtypes if t not in present]
+        if level is not None and not any(t in LEVELS[level][1] for t in absent):
+            kinds = sorted(absent, key=lambda t: int(t[1:]))
+            named = kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + " and " + kinds[-1]
+            verb = "is" if len(kinds) == 1 else "are"
+            detail = f"{key} — not resolved: {named} {verb} not required at {level} and {verb} not in the package"
+            if (rule, detail) not in downgraded:
+                downgraded.add((rule, detail))
+                fail(rule, detail, field=key, severity="advisory")
+        else:
+            notes[rule].add(f"{key} not resolved: the package carries no {', '.join(absent)} file")
 
     def ref(rule, rec, field, value, rtype):
-        """True if value identifies a record of rtype; a finding if not; None (noted) if the package carries no rtype."""
+        """True if value identifies a record of rtype; a finding if not; None if the package carries no rtype
+        (noted, or an advisory finding where the declared level does not require rtype)."""
         if not isinstance(value, str):
             return None
         if rtype not in present:
-            notes[rule].add(f"{re.sub(r'/[0-9]+$', '', field)} not resolved: the package carries no {rtype} file")
+            unresolved(rule, re.sub(r'/[0-9]+$', '', field), (rtype,))
             return None
         if value in index[rtype]:
             return True
@@ -536,8 +666,8 @@ def validate(package_dir, schema_dir=None):
     for rec in data["R8"]:
         ref("REF-06", rec, "source_statement_id", rec.data.get("source_statement_id"), "R7")
     related = [rec for t in ("R8", "R9", "R12") for rec in data[t] if as_list(rec.data.get("related_record_ids"))]
-    if related and (absent := [t for t in RELATED_TYPES if t not in present]):
-        notes["REF-06"].add(f"related_record_ids not resolved: the package carries no {', '.join(absent)} file")
+    if related and any(t not in present for t in RELATED_TYPES):
+        unresolved("REF-06", "related_record_ids", RELATED_TYPES)
     elif related:
         # A related record is a record of any type, or a rail reference, ledger entry, authority reference
         # or transaction hash carried by R3, R4 or R6.
@@ -555,20 +685,22 @@ def validate(package_dir, schema_dir=None):
             for i, x in missing:
                 fail("REF-06", f"related record {x} is not in the package", rec, field=f"related_record_ids/{i}")
 
-    # REF-07: transactions are dated inside the manifest period (credited_at; else settled_at, initiated_at)
+    # REF-07 and REF-09 compare dates with the manifest period; neither runs without a usable period
     start, end = parse_dt(manifest.get("period_start")), parse_dt(manifest.get("period_end"))
-    if start is None or end is None:
-        ran["REF-07"] = False
-        notes["REF-07"].add("not run: the manifest period is not readable")
-    elif end < start:
-        ran["REF-07"] = False
-        notes["REF-07"].add("not run: the manifest period ends before it starts")
-    else:
+    unusable = ("the manifest period is not readable" if start is None or end is None else
+                "the manifest period ends before it starts" if end < start else None)
+    for rule in ("REF-07", "REF-09"):
+        if unusable:
+            ran[rule] = False
+            notes[rule].add(f"not run: {unusable}")
+    span = None if unusable else f"the period {manifest['period_start']} to {manifest['period_end']}"
+
+    # REF-07: transactions are dated inside the manifest period (credited_at; else settled_at, initiated_at)
+    if span:
         for rec in payments:
             field = next((k for k in ("credited_at", "settled_at", "initiated_at") if parse_dt(rec.data.get(k))), None)
             if field and not start <= parse_dt(rec.data[field]) <= end:
-                fail("REF-07", f"{field} {rec.data[field]} is outside the period "
-                     f"{manifest['period_start']} to {manifest['period_end']}", rec, field=field)
+                fail("REF-07", f"{field} {rec.data[field]} is outside {span}", rec, field=field)
 
     # REF-08: attestation references resolve to an R11 attestation that covers the transaction's location
     attestations = {r.data.get("attestation_id"): r.data for r in data["R11"] if isinstance(r.data.get("attestation_id"), str)}
@@ -577,6 +709,85 @@ def validate(package_dir, schema_dir=None):
         if ref("REF-08", rec, "attestation_ref", att, "R11") and isinstance(loc, str) \
                 and loc not in as_list(attestations[att].get("covers_location_ids")):
             fail("REF-08", f"attestation {att} does not cover funds location {loc}", rec, field="attestation_ref")
+
+    # REF-09: statement periods and gaming days lie within the manifest period. A gaming day is a calendar date,
+    # compared with the dates of the period boundaries, each in the offset the manifest states for it.
+    if span:
+        for rec in data["R13"] + data["R14"]:
+            for key in ("period_start", "period_end"):
+                if (t := parse_dt(rec.data.get(key))) is not None and not start <= t <= end:
+                    fail("REF-09", f"{key} {rec.data[key]} is outside {span}", rec, field=key)
+            if (day := parse_date(rec.data.get("gaming_day"))) is not None and not start.date() <= day <= end.date():
+                fail("REF-09", f"gaming_day {rec.data['gaming_day']} is outside {span}", rec, field="gaming_day")
+
+    # REF-10: a correction names the statement it replaces: another statement of the same line, where the package
+    # carries it. A statement the package does not carry may belong to an earlier package: noted, not reported.
+    statements = {rid(r): r.data for r in data["R13"] if rid(r)}
+    corrects = {s: d["corrects_statement_id"] for s, d in statements.items()
+                if isinstance(d.get("corrects_statement_id"), str)}
+    for rec in data["R13"]:
+        target, sid = rec.data.get("corrects_statement_id"), rid(rec)
+        if not isinstance(target, str):
+            continue                                                # a period statement, or STR-04
+        if target not in index["R13"]:
+            notes["REF-10"].add(f"corrects_statement_id {target} not resolved: the package does not carry the "
+                                "statement it replaces, which may belong to an earlier package")
+        elif target == sid:
+            fail("REF-10", "names itself as the statement it replaces", rec, field="corrects_statement_id")
+        elif differs := [k for k in LINE_FIELDS if statements[target].get(k) != rec.data.get(k)]:
+            fail("REF-10", f"corrects_statement_id {target} is a statement of another line: " + "; ".join(
+                f"{k} {statements[target].get(k)}, not {rec.data.get(k)}" for k in differs), rec,
+                field="corrects_statement_id")
+        elif sid is not None:                                       # corrections of corrections: no loop
+            seen, cur = {sid}, target
+            while cur in corrects and cur not in seen:
+                seen.add(cur)
+                cur = corrects[cur]
+            if cur == sid:
+                fail("REF-10", f"the corrects_statement_id chain returns to {sid}", rec, field="corrects_statement_id")
+
+    # REF-11: venue counts cite a venue an R1 location carries, and bank the drop to an R6 movement or an R1 location
+    venues = strings(r.data.get("venue_id") for r in data["R1"])
+    for rec in data["R14"]:
+        venue = rec.data.get("venue_id")
+        if isinstance(venue, str) and venue not in venues:
+            if "R1" not in present:
+                unresolved("REF-11", "venue_id", ("R1",))
+            elif not venues:
+                notes["REF-11"].add("venue_id not resolved: no R1 location carries venue_id")
+            else:
+                fail("REF-11", f"venue_id {venue} is carried by no R1 location", rec, field="venue_id")
+        drop = rec.data.get("drop_deposit_ref")
+        if isinstance(drop, str) and not any(drop in index[t] for t in ("R6", "R1") if t in present):
+            if any(t not in present for t in ("R6", "R1")):
+                unresolved("REF-11", "drop_deposit_ref", ("R6", "R1"))
+            else:
+                fail("REF-11", f"drop_deposit_ref {drop} is neither an R6 movement nor an R1 location", rec,
+                     field="drop_deposit_ref")
+
+    # REF-12: the authority's own figure on a statement cites the R12 report reference that carries it
+    for rec in data["R13"]:
+        figure = rec.data.get("authority_figure_ref")
+        if isinstance(figure, dict):
+            ref("REF-12", rec, "authority_figure_ref/report_reference_id", figure.get("report_reference_id"), "R12")
+
+    # REF-13: the declared gross gaming revenue follows the formula the statement names, applied exactly to the
+    # statement's own fields. This is the statement's internal consistency, not its reconciliation to R3, R4
+    # and R7 (the money bridge), which needs the profile's tolerance and belongs to the conformance suite.
+    for rec in data["R13"]:
+        if rec.data.get("ggr_formula") == "profile":
+            notes["REF-13"].add("statements with ggr_formula profile are not tested: the formula is the profile's")
+        if not (formula := GGR_FORMULAS.get(rec.data.get("ggr_formula"))):
+            continue
+        text, plus, minus = formula
+        amounts = {k: _decimal(rec.data.get(k, "0" if k in BONUS_FIELDS else None)) for k in plus + minus}
+        declared = _decimal(rec.data.get("ggr_declared"))
+        if declared is None or None in amounts.values():
+            continue                                                # malformed amounts are STR-04 or STR-06
+        expected = sum(amounts[k] for k in plus) - sum(amounts[k] for k in minus)
+        if declared != expected:
+            fail("REF-13", f"ggr_declared {rec.data['ggr_declared']} differs from the {rec.data['ggr_formula']} "
+                 f"formula on the statement's own fields: {text} = {expected}", rec, field="ggr_declared")
 
     return _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran)
 
@@ -589,10 +800,10 @@ def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran):
                        "requirement": requirement, "failure": failure,
                        "status": "not_run" if not ran[rule_id] else "fail" if findings else "pass",
                        "findings": findings, "notes": sorted(notes[rule_id])})
-    blocking = sum(len(c["findings"]) for c in checks if c["severity"] == "blocking")
-    advisory = sum(len(c["findings"]) for c in checks if c["severity"] == "advisory")
+    blocking = sum(f["severity"] == "blocking" for c in checks for f in c["findings"])
+    advisory = sum(f["severity"] == "advisory" for c in checks for f in c["findings"])
     keys = ("package_id", "licence_number", "licensee", "profile_id", "profile_version",
-            "period_start", "period_end", "standard_version", "synthetic")
+            "period_start", "period_end", "standard_version", "conformance_level_declared", "synthetic")
     return {
         "validator": "ctres-validator-lite",
         "validator_version": __version__,
@@ -609,7 +820,9 @@ def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran):
                     "not_run": sum(c["status"] == "not_run" for c in checks),
                     "blocking_findings": blocking, "advisory_findings": advisory},
         "checks": checks,
-        "not_checked": ("Reconciliation of statement totals against the records behind them, and the profile "
-                        "conformance and completeness classes of §11, belong to the CTRES conformance suite, "
-                        f"available on request: {CONFORMANCE_SUITE}"),
+        "not_checked": ("Reconciliation of statement totals against the records behind them, including the money "
+                        "bridge of §4.13 between R13 and R3, R4 and R7 and the agreement of R14 counts with the R13 "
+                        "venue line and with the bankings in R6 and R7; whether an R13 jurisdiction_category is in "
+                        "the profile's taxonomy; and the profile conformance and completeness classes of §11. These "
+                        f"belong to the CTRES conformance suite, available on request: {CONFORMANCE_SUITE}"),
     }

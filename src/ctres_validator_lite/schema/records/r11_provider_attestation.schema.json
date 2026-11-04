@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r11_provider_attestation.schema.json",
-  "title": "CTRES v1.0 R11 Provider Attestation",
+  "$id": "https://ctres.org/schema/1.1/records/r11_provider_attestation.schema.json",
+  "title": "CTRES v1.1 R11 Provider Attestation",
   "description": "Where money sits in a provider's pooled account, the provider's statement standing in place of the operator's own statements (§4.11). It applies equally to a card acquirer's reserve, a mobile money collection account, an e-money balance and a virtual-asset provider's pooled wallet.",
   "type": "object",
   "properties": {

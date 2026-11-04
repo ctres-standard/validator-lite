@@ -1,13 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r01_funds_location.schema.json",
-  "title": "CTRES v1.0 R1 Funds Location",
+  "$id": "https://ctres.org/schema/1.1/records/r01_funds_location.schema.json",
+  "title": "CTRES v1.1 R1 Funds Location",
   "description": "Every place the operator holds money, in any form: the record that answers segregation and protection requirements (§4.1). Locations of type crypto_wallet carry the virtual-asset module fields (§6).",
   "type": "object",
   "properties": {
     "location_id": {
       "description": "Stable internal identifier of the funds location (§4.1).",
       "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "venue_id": {
+      "description": "Identifier of the land-based venue the location belongs to, so that R14 venue counts can cite the venue; used on cash_float locations (§4.1; §4.14).",
+      "x-ctres-req": "O",
       "$ref": "../common.schema.json#/$defs/identifier"
     },
     "location_type": {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/manifest.schema.json",
-  "title": "CTRES v1.0 package manifest",
+  "$id": "https://ctres.org/schema/1.1/manifest.schema.json",
+  "title": "CTRES v1.1 package manifest",
   "description": "manifest.json, carried by every package (§8.2). The SHA-256 of manifest.json is the package fingerprint: a receipt that quotes it proves which package was submitted. The manifest may be signed with the operator's certificate where the profile requires.",
   "type": "object",
   "properties": {
@@ -11,9 +11,13 @@
       "const": "CTRES"
     },
     "standard_version": {
-      "description": "Version of the Standard and of this schema family the package conforms to (§13 Versioning).",
+      "description": "Version of the Standard and of this schema family the package conforms to (§13 Versioning). A package that lists an R13 or R14 file declares 1.1; a package without them may declare 1.0 and remains valid.",
       "x-ctres-req": "M",
-      "const": "1.0"
+      "type": "string",
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
     },
     "package_id": {
       "description": "Identifier of the package; a correction supersedes a package by this identifier (§8.2).",
@@ -70,17 +74,18 @@
     "reporting_currency": {
       "description": "Reporting currency of all *_reporting_ccy amounts in the package (§3 Currency-aware).",
       "x-ctres-req": "C",
-      "x-ctres-condition": "Where the package contains records with reporting-currency amounts (R3, R4, R7, R8) (§3). Enforced by this schema where files lists an R3 or R4 file, since every R3 and R4 record carries amount_reporting_ccy (§4.3).",
+      "x-ctres-condition": "Where the package contains records with reporting-currency amounts (R3, R4, R7, R8, R13) (§3). Enforced by this schema where files lists an R3 or R4 file, since every R3 and R4 record carries amount_reporting_ccy (§4.3).",
       "$ref": "common.schema.json#/$defs/currency_code"
     },
     "conformance_level_declared": {
-      "description": "Conformance level declared in the conformance statement (§10; Annex D).",
+      "description": "Conformance level declared in the conformance statement (§10; Annex D): level_1 Return, level_2 Evidence, level_3 Custody, level_4 Supervision.",
       "x-ctres-req": "O",
       "type": "string",
       "enum": [
         "level_1",
         "level_2",
-        "level_3"
+        "level_3",
+        "level_4"
       ]
     },
     "records_start_date": {
@@ -118,7 +123,9 @@
               "R9",
               "R10",
               "R11",
-              "R12"
+              "R12",
+              "R13",
+              "R14"
             ]
           },
           "record_count": {
@@ -328,6 +335,37 @@
         "required": [
           "reporting_currency"
         ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "files": {
+            "contains": {
+              "properties": {
+                "record_type": {
+                  "enum": [
+                    "R13",
+                    "R14"
+                  ]
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            }
+          }
+        },
+        "required": [
+          "files"
+        ]
+      },
+      "then": {
+        "properties": {
+          "standard_version": {
+            "const": "1.1"
+          }
+        }
       }
     }
   ],

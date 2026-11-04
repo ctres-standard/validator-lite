@@ -25,4 +25,6 @@ jobs:
       - name: Validate the demonstration packages
         run: |
           ctres-validate demo/clean
+          ctres-validate demo/level1
+          ctres-validate demo/level2
           if ctres-validate demo/defects; then echo "demo/defects passed, but must fail"; exit 1; fi

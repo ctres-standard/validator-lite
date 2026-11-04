@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/rail_modules.schema.json",
-  "title": "CTRES v1.0 rail modules",
+  "$id": "https://ctres.org/schema/1.1/rail_modules.schema.json",
+  "title": "CTRES v1.1 rail modules",
   "description": "Rail-module fields (§6). Each rail adds the identifiers it naturally carries. Within a module, x-ctres-req M means mandatory whenever the module applies. instrument_* definitions give the shape of R2 instrument_detail; transaction_* definitions add fields to R3 and R4; location_* and check_* definitions add fields to R1 and R5. The record schemas select a module by the value of rail (or location_type, or check_type).",
   "x-ctres-rail-to-module": {
     "card": "card",

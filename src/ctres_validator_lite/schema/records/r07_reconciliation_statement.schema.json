@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ctres.org/schema/1.0/records/r07_reconciliation_statement.schema.json",
-  "title": "CTRES v1.0 R7 Reconciliation Statement",
+  "$id": "https://ctres.org/schema/1.1/records/r07_reconciliation_statement.schema.json",
+  "title": "CTRES v1.1 R7 Reconciliation Statement",
   "description": "Location and coverage statements that turn reconciliation from a claim into a number (§4.7). The custody model declared in R1 selects the reconciliation profile.",
   "type": "object",
   "properties": {

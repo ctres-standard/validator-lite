@@ -1,0 +1,51 @@
+{
+  "standard": "CTRES",
+  "standard_version": "1.1",
+  "package_id": "PKG-XJ-DEMO-0001-2026-11-LEVEL2",
+  "licence_number": "XJ/DEMO/0001",
+  "licensing_authority": "Example Gambling Authority (fictional)",
+  "licensee": "Example Operator Ltd (SYNTHETIC)",
+  "profile_id": "XJ-EXAMPLE",
+  "profile_version": "1.1.0",
+  "period_start": "2026-11-01T00:00:00+01:00",
+  "period_end": "2026-11-30T23:59:59+01:00",
+  "submission_mode": "periodic_package",
+  "reporting_currency": "EUR",
+  "conformance_level_declared": "level_2",
+  "records_start_date": "2026-01-05",
+  "files": [
+    {
+      "file": "R3_deposits.jsonl",
+      "record_type": "R3",
+      "record_count": 12,
+      "sha256": "ab14bbd83dd68eeb5039ec7d9f9445a486a87747f5427a1ed1367a2a68bf4b58"
+    },
+    {
+      "file": "R4_withdrawals.jsonl",
+      "record_type": "R4",
+      "record_count": 6,
+      "sha256": "7571c096dc23772a43dcc6738bcf22c73da3f2f410892dcb50398ada41d7c942"
+    },
+    {
+      "file": "R7_reconciliation_statements.jsonl",
+      "record_type": "R7",
+      "record_count": 2,
+      "sha256": "c76db4ee9429b14940c01c89ff98041eb7ae6cf38e5bdda32ccba4fb384f5ced"
+    },
+    {
+      "file": "R13_gaming_revenue_statements.jsonl",
+      "record_type": "R13",
+      "record_count": 3,
+      "sha256": "f507befd8f23adc85323ca2da7d24d01e3b70dd9d17024dcbad0e3434b1f8acb"
+    },
+    {
+      "file": "R14_venue_counts.jsonl",
+      "record_type": "R14",
+      "record_count": 3,
+      "sha256": "be19d274c8fa2023672a567b6e79a598d5920a172ca49ff846b019b1ad5a136b"
+    }
+  ],
+  "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
+  "generating_software_version": "1.1.0",
+  "synthetic": true
+}
