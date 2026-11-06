@@ -14,7 +14,7 @@ python scripts/make_demo.py
 | [`demo/level1`](#demolevel1) | `level_1` Return | R13 | 3 | PASS, 1 advisory finding |
 | [`demo/level2`](#demolevel2) | `level_2` Evidence | R3, R4, R7, R13, R14 | 26 | PASS, 10 advisory findings |
 | [`demo/defects`](#demodefects) | `level_4` Supervision | R1 to R14, with ten defects | 76 | FAIL, 9 blocking and 1 advisory |
-| [`demo/stream/events.ndjson`](#demostream) | — (a stream, §8.4) | R3, R4, R5, R13, R15 events and a checkpoint | 26 events | `--stream`: PASS, no findings |
+| [`demo/stream/events.ndjson`](#demostream) | - (a stream, §8.4) | R3, R4, R5, R13, R15 events and a checkpoint | 26 events | `--stream`: PASS, no findings |
 | [`demo/stream/package`](#demostream) | `level_2` Evidence | R3, R4, R7, R13, R15 | 22 | `--reconcile`: PASS, 7 advisory findings |
 
 The clean package as release 1.0.1 wrote it, a CTRES v1.0 package without R13 and R14, is kept unchanged under [`tests/fixtures/clean_1_0`](../tests/fixtures/clean_1_0); the tests show that it still passes. Its manifest declares `level_2` in the v1.0 meaning of the field, a delivery level, so STR-09 is not run on it.
@@ -61,7 +61,7 @@ The manifest and `R13_gaming_revenue_statements.jsonl` of `demo/clean`, nothing 
 
 | Check | Expected finding |
 |---|---|
-| REF-12 (advisory) | `authority_figure_ref/report_reference_id — not resolved: R12 is not required at level_1 and is not in the package` |
+| REF-12 (advisory) | `authority_figure_ref/report_reference_id - not resolved: R12 is not required at level_1 and is not in the package` |
 
 `ctres-validate demo/level1` exits with status 0:
 
@@ -75,14 +75,14 @@ The R3, R4, R7 and R13 files of `demo/clean`, the core, and its R14 file, which 
 
 | Check | Expected findings (all advisory) |
 |---|---|
-| REF-01 | `location_id — not resolved: R1 is not required at level_2 and is not in the package` |
-| REF-02 | `check_ids — not resolved: R5 is not required at level_2 and is not in the package` |
-| REF-03 | `instrument_id — not resolved: R2 is not required at level_2 and is not in the package`; `source_instrument_ids — not resolved: R2 is not required at level_2 and is not in the package` |
-| REF-05 | `provider_id — not resolved: R10 is not required at level_2 and is not in the package` |
-| REF-06 | `exception_ids — not resolved: R8 is not required at level_2 and is not in the package` |
-| REF-08 | `attestation_ref — not resolved: R11 is not required at level_2 and is not in the package` |
-| REF-11 | `venue_id — not resolved: R1 is not required at level_2 and is not in the package`; `drop_deposit_ref — not resolved: R1 and R6 are not required at level_2 and are not in the package` |
-| REF-12 | `authority_figure_ref/report_reference_id — not resolved: R12 is not required at level_2 and is not in the package` |
+| REF-01 | `location_id - not resolved: R1 is not required at level_2 and is not in the package` |
+| REF-02 | `check_ids - not resolved: R5 is not required at level_2 and is not in the package` |
+| REF-03 | `instrument_id - not resolved: R2 is not required at level_2 and is not in the package`; `source_instrument_ids - not resolved: R2 is not required at level_2 and is not in the package` |
+| REF-05 | `provider_id - not resolved: R10 is not required at level_2 and is not in the package` |
+| REF-06 | `exception_ids - not resolved: R8 is not required at level_2 and is not in the package` |
+| REF-08 | `attestation_ref - not resolved: R11 is not required at level_2 and is not in the package` |
+| REF-11 | `venue_id - not resolved: R1 is not required at level_2 and is not in the package`; `drop_deposit_ref - not resolved: R1 and R6 are not required at level_2 and are not in the package` |
+| REF-12 | `authority_figure_ref/report_reference_id - not resolved: R12 is not required at level_2 and is not in the package` |
 
 `ctres-validate demo/level2` exits with status 0:
 
@@ -140,12 +140,12 @@ Result: PASS: no blocking findings, 0 advisory; 26 events in 1 stream (XJ/DEMO/0
 
 | Check | Expected findings (all advisory) |
 |---|---|
-| REF-01 | `location_id — not resolved: R1 is not required at level_2 and is not in the package` |
-| REF-02 | `check_ids — not resolved: R5 is not required at level_2 and is not in the package` |
-| REF-03 | `instrument_id — not resolved: R2 is not required at level_2 and is not in the package`; `source_instrument_ids — not resolved: R2 is not required at level_2 and is not in the package` |
-| REF-05 | `provider_id — not resolved: R10 is not required at level_2 and is not in the package` |
-| REF-08 | `attestation_ref — not resolved: R11 is not required at level_2 and is not in the package` |
-| REC-01 | `R5 records — not reconciled: R5 is not required at level_2 and is not in the package`; and a note: `1 R13 interim statement is superseded by the period statement and not expected in the package` |
+| REF-01 | `location_id - not resolved: R1 is not required at level_2 and is not in the package` |
+| REF-02 | `check_ids - not resolved: R5 is not required at level_2 and is not in the package` |
+| REF-03 | `instrument_id - not resolved: R2 is not required at level_2 and is not in the package`; `source_instrument_ids - not resolved: R2 is not required at level_2 and is not in the package` |
+| REF-05 | `provider_id - not resolved: R10 is not required at level_2 and is not in the package` |
+| REF-08 | `attestation_ref - not resolved: R11 is not required at level_2 and is not in the package` |
+| REC-01 | `R5 records - not reconciled: R5 is not required at level_2 and is not in the package`; and a note: `1 R13 interim statement is superseded by the period statement and not expected in the package` |
 | REC-02 | no finding; a note: `R7 is not streamed: its records are not reconciled` |
 
 ```text

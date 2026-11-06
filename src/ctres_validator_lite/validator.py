@@ -685,7 +685,7 @@ def validate(package_dir, schema_dir=None, reconcile=None, max_latency=None):
             kinds = sorted(absent, key=lambda t: int(t[1:]))
             named = kinds[0] if len(kinds) == 1 else ", ".join(kinds[:-1]) + " and " + kinds[-1]
             verb = "is" if len(kinds) == 1 else "are"
-            detail = f"{key} — not resolved: {named} {verb} not required at {level} and {verb} not in the package"
+            detail = f"{key} - not resolved: {named} {verb} not required at {level} and {verb} not in the package"
             if (rule, detail) not in downgraded:
                 downgraded.add((rule, detail))
                 fail(rule, detail, field=key, severity="advisory")
@@ -1198,7 +1198,7 @@ def _reconcile(stream, manifest, data, index, present, level, hits, notes):
                  "package", file=name, line=ev.line, record=key, field=f"record/{RECORDS[rtype][1]}")
     for rtype in sorted(absent, key=lambda t: int(t[1:])):
         if level is not None and rtype not in LEVELS[level][1]:
-            fail("REC-01", f"{rtype} records — not reconciled: {rtype} is not required at {level} and is not in the "
+            fail("REC-01", f"{rtype} records - not reconciled: {rtype} is not required at {level} and is not in the "
                  "package", severity="advisory")
         else:
             notes["REC-01"].add(f"{rtype} records not reconciled: the package carries no {rtype} file")

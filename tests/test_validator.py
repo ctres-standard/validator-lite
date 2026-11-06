@@ -205,7 +205,7 @@ class DemoPackages(unittest.TestCase):
         self.assertEqual({k: len(v) for k, v in failed(res).items()}, {"REF-12": 1})
         self.assertEqual(failed(res)["REF-12"][0], {
             "file": None, "line": None, "record": None, "field": "authority_figure_ref/report_reference_id",
-            "detail": "authority_figure_ref/report_reference_id — not resolved: R12 is not required at level_1 and "
+            "detail": "authority_figure_ref/report_reference_id - not resolved: R12 is not required at level_1 and "
                       "is not in the package", "severity": "advisory"})
         self.assertEqual(res["summary"], {"checks": 23, "passed": 22, "failed": 1, "not_run": 0,
                                           "blocking_findings": 0, "advisory_findings": 1})
@@ -220,11 +220,11 @@ class DemoPackages(unittest.TestCase):
         self.assertEqual({k: len(v) for k, v in failed(res).items()}, LEVEL2_ADVISORY)
         for f in (f for fs in failed(res).values() for f in fs):
             self.assertEqual((f["severity"], f["file"], f["line"], f["record"]), ("advisory", None, None, None))
-            self.assertRegex(f["detail"], r"^[a-z_/]+ — not resolved: R\d+( and R\d+)? (is|are) not required at level_2 "
+            self.assertRegex(f["detail"], r"^[a-z_/]+ - not resolved: R\d+( and R\d+)? (is|are) not required at level_2 "
                                           r"and (is|are) not in the package$")
         self.assertEqual([f["detail"] for f in failed(res)["REF-11"]], [
-            "venue_id — not resolved: R1 is not required at level_2 and is not in the package",
-            "drop_deposit_ref — not resolved: R1 and R6 are not required at level_2 and are not in the package"])
+            "venue_id - not resolved: R1 is not required at level_2 and is not in the package",
+            "drop_deposit_ref - not resolved: R1 and R6 are not required at level_2 and are not in the package"])
         self.assertEqual(res["summary"]["blocking_findings"], 0)
         self.assertEqual(res["summary"]["advisory_findings"], 10)
         self.assertTrue(all(not c["notes"] for c in res["checks"]))
@@ -347,7 +347,7 @@ class CommandLine(unittest.TestCase):
         code, out, _ = run_cli(str(LEVEL2))
         self.assertEqual(code, 0)
         self.assertIn("REF-03  FAIL  advisory  2 findings", out)
-        self.assertIn("          instrument_id — not resolved: R2 is not required at level_2 and is not in the package", out)
+        self.assertIn("          instrument_id - not resolved: R2 is not required at level_2 and is not in the package", out)
         self.assertNotIn("blocking  ", out.split("\nReferential:")[1])
 
     def test_json_output_schema_is_stable(self):
@@ -881,12 +881,12 @@ class ReferencesByLevel(PackageCase):
         res = self.validate()
         self.assertAdvisory(res, {"REF-03": 2, "REF-06": 1})           # REF-06: related_record_ids may name R2 too
         self.assertEqual(failed(res)["REF-06"][0]["detail"],
-                         "related_record_ids — not resolved: R2 is not required at level_2 and is not in the package")
+                         "related_record_ids - not resolved: R2 is not required at level_2 and is not in the package")
         self.assertEqual(failed(res)["REF-03"], [
             {"file": None, "line": None, "record": None, "field": "instrument_id", "severity": "advisory",
-             "detail": "instrument_id — not resolved: R2 is not required at level_2 and is not in the package"},
+             "detail": "instrument_id - not resolved: R2 is not required at level_2 and is not in the package"},
             {"file": None, "line": None, "record": None, "field": "source_instrument_ids", "severity": "advisory",
-             "detail": "source_instrument_ids — not resolved: R2 is not required at level_2 and is not in the package"}])
+             "detail": "source_instrument_ids - not resolved: R2 is not required at level_2 and is not in the package"}])
         self.assertEqual(check(res, "REF-03")["notes"], [])
         self.assertEqual(run_cli(str(self.pkg))[0], 0)
 
@@ -919,13 +919,13 @@ class ReferencesByLevel(PackageCase):
         res = self.validate()
         self.assertAdvisory(res, {"REF-02": 1, "REF-06": 1, "REF-12": 1})
         self.assertEqual([f["detail"] for f in failed(res)["REF-02"]],
-                         ["check_ids — not resolved: R5 is not required at level_3 and is not in the package"])
+                         ["check_ids - not resolved: R5 is not required at level_3 and is not in the package"])
 
     def test_related_records_advisory_where_none_of_the_absent_types_is_required(self):
         self.set_level("level_2")                                    # R12 included voluntarily at level_2
         self.remove("R1", "R2", "R5", "R6", "R8", "R9", "R10", "R11")
         res = self.validate()
-        self.assertIn("related_record_ids — not resolved: R1, R2, R5, R6, R8 and R10 are not required at level_2 "
+        self.assertIn("related_record_ids - not resolved: R1, R2, R5, R6, R8 and R10 are not required at level_2 "
                       "and are not in the package", [f["detail"] for f in failed(res)["REF-06"]])
         self.assertEqual(res["result"], "pass")
         self.assertEqual(res["summary"]["blocking_findings"], 0)
@@ -954,7 +954,7 @@ class ReferencesByLevel(PackageCase):
         self.assertEqual([f["field"] for f in failed(res)["REF-01"]],
                          ["location_id", "covers_location_ids", "source_location_id", "destination_location_id"])
         self.assertEqual(failed(res)["REF-11"][0]["detail"],
-                         "venue_id — not resolved: R1 is not required at level_2 and is not in the package")
+                         "venue_id - not resolved: R1 is not required at level_2 and is not in the package")
 
 
 # ------------------------------------------------------------------ gaming revenue and venue counts (v1.1)
@@ -1415,7 +1415,7 @@ class BetEvents(PackageCase):
         self.assertAdvisory(res, STREAM_PKG_ADVISORY | {"REF-14": 1})
         self.assertEqual(failed(res)["REF-14"][0], {
             "file": None, "line": None, "record": None, "field": "venue_id", "severity": "advisory",
-            "detail": "venue_id — not resolved: R1 is not required at level_2 and is not in the package"})
+            "detail": "venue_id - not resolved: R1 is not required at level_2 and is not in the package"})
 
     def test_ref14_venue_resolved_against_r1(self):
         text = (CLEAN / "R1_funds_locations.jsonl").read_text(encoding="utf-8")
@@ -1873,7 +1873,7 @@ class ReconcileChecks(StreamCase):
                                           "blocking_findings": 0, "advisory_findings": 7})
         self.assertEqual(failed(res)["REC-01"], [{
             "file": None, "line": None, "record": None, "field": None, "severity": "advisory",
-            "detail": "R5 records — not reconciled: R5 is not required at level_2 and is not in the package"}])
+            "detail": "R5 records - not reconciled: R5 is not required at level_2 and is not in the package"}])
         self.assertEqual(check(res, "REC-01")["notes"],
                          ["1 R13 interim statement is superseded by the period statement and not expected in the package"])
         self.assertEqual(check(res, "REC-02")["notes"], ["R7 is not streamed: its records are not reconciled"])

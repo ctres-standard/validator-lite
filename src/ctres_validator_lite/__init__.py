@@ -10,7 +10,7 @@ completeness and the reconciliation of statement totals with the records behind 
 this package; they belong to the CTRES conformance suite.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # Version of the ctres-standard/schema release vendored under schema/ (written by scripts/sync_schema.py).
 SCHEMA_VERSION = "1.1.0"
