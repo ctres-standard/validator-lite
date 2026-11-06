@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.1/records/r15_bet_event.schema.json",
+  "title": "CTRES v1.1 R15 Bet Event",
+  "description": "One bet, round, ticket or hand (§4.15): the Wagering module of §10, optional at every conformance level and required where the profile sets submission.bet_level. The record is emitted when the bet is placed and re-emitted, with op update in a stream (§8.4), when its state changes; in a package only the final state appears, in the file R15_bet_events.jsonl. An R13 line for a period equals the R15 records of that line aggregated under the profile's recognition, placed_at for stakes recognised when placed and settled_at when settled (§4.13; §5 Revenue and levy recognition); that reconciliation belongs to the conformance suite (§11). R15 carries no personal data beyond the pseudonymous player reference (§12).",
+  "type": "object",
+  "properties": {
+    "bet_id": {
+      "description": "Identifier of the bet, round, ticket or hand, stable across its re-emissions (§4.15).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "player_ref": {
+      "description": "Pseudonymous player reference (§4.15; §4.2; §12).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/player_ref"
+    },
+    "player_ref_scope": {
+      "description": "Brand or licence the player reference belongs to (§4.15; §4.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/player_ref_scope"
+    },
+    "product_line": {
+      "description": "The operator's own product or game-type code, as carried by R13 product_line, so that the bets of a line aggregate to its statement (§4.15; §4.13).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "channel": {
+      "description": "Channel the bet was placed through: online, a retail point, or a venue (§4.15; §4.13).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "online",
+        "retail",
+        "venue"
+      ]
+    },
+    "currency": {
+      "description": "ISO 4217 currency in which the stake and the winnings are stated (§4.15; §3 Currency-aware).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/currency_code"
+    },
+    "stake": {
+      "description": "Cash part of the stake (§4.15; §4.13 stakes_cash).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "placed_at": {
+      "description": "When the bet was placed or accepted; the anchor of stakes recognised when placed (§4.15; §5 Revenue and levy recognition).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "status": {
+      "description": "State of the bet: open, settled, void (the stake returned), or cashed_out (settled early at the operator's offer) (§4.15).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "open",
+        "settled",
+        "void",
+        "cashed_out"
+      ]
+    },
+    "stake_bonus": {
+      "description": "Part of the stake funded from bonus or promotional credits (§4.15; §4.13 stakes_bonus).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where part of the stake was funded from bonus or promotional credits (§4.15).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "winnings": {
+      "description": "Cash winnings paid or credited at settlement, gross of any withholding tax (§4.15; §4.13 winnings_cash).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where status is settled or cashed_out and winnings were paid or credited; absent or zero while status is open (§4.15).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "winnings_bonus": {
+      "description": "Winnings credited as non-cashable credits (§4.15; §4.13 winnings_bonus).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where bonus winnings were credited at settlement (§4.15).",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "settled_at": {
+      "description": "When the bet was settled, voided or cashed out; the anchor of stakes and winnings recognised when settled (§4.15; §5 Revenue and levy recognition).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where status is settled, void or cashed_out; not used while status is open (§4.15).",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "void_reason": {
+      "description": "Why the bet was voided, for example an event cancelled or a palpable error (§4.15).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Mandatory where status is void; not used otherwise (§4.15).",
+      "$ref": "../common.schema.json#/$defs/text"
+    },
+    "jurisdiction_category": {
+      "description": "The category of the profile's product taxonomy that product_line maps to, as on R13 (§4.15; §4.13; §5 Revenue and levy).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile publishes a product taxonomy (§5 Revenue and levy aggregation taxonomy).",
+      "$ref": "../common.schema.json#/$defs/snake_code"
+    },
+    "venue_id": {
+      "description": "Venue the bet was placed at, as carried by venue_id on the venue's R1 cash_float location and on the venue line of R13 (§4.15; §4.13; §4.1).",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where channel is venue and the licence covers more than one venue, or the profile's aggregation axes include venue (§4.15; §4.13; §5 Revenue and levy aggregation). The licence and the profile are not visible to the record, so this schema does not enforce the condition.",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "game_ref": {
+      "description": "Identifier of the game, event or market in the operator's platform; never its content (§4.15).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "odds": {
+      "description": "Odds offered at placement, as a decimal string in the format the operator quotes (§4.15).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/decimal"
+    },
+    "rake_and_fees": {
+      "description": "Commission, rake or fee the operator earned on the bet (§4.15; §4.13 rake_and_fees).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "jackpot_contribution": {
+      "description": "Contribution of the bet to a progressive or pooled jackpot (§4.15; §4.13 jackpot_contributions).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/non_negative_decimal"
+    },
+    "ledger_entry_refs": {
+      "description": "Ledger entries of the stake debit and the winnings credit, in the ledger that ledger_entry_ref on R3 and R4 names (§4.15; §4.3).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier_list"
+    },
+    "authority_reference": {
+      "description": "Identifier a central system or hub issued for this bet, where the profile routes bets through one (§4.15; §5 Mandatory hubs and gateways; §4.3 authority_reference).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "evidence_ref": {
+      "description": "Where the platform's bet log or record behind this event is retained (§4.15; §7).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    }
+  },
+  "required": [
+    "bet_id",
+    "player_ref",
+    "player_ref_scope",
+    "product_line",
+    "channel",
+    "currency",
+    "stake",
+    "placed_at",
+    "status"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "open"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "winnings": {
+            "pattern": "^0+(\\.0+)?$",
+            "x-ctres-message": "winnings is absent or zero while status is open"
+          },
+          "settled_at": false,
+          "void_reason": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "settled",
+              "cashed_out"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "settled_at"
+        ],
+        "properties": {
+          "void_reason": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "void"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "settled_at",
+          "void_reason"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

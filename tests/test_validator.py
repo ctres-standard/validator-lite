@@ -5,8 +5,11 @@ Run:  python -m unittest discover -s tests -v
 The demonstration packages under demo/ are the fixtures. Each check test copies demo/clean into a
 temporary directory, makes one change, reseals the manifest unless the change is to the seal
 itself, and asserts that exactly the expected check reports it. demo/level1 and demo/level2 are the
-same data cut down to the record types of their conformance level (§10). tests/fixtures/clean_1_0
-is the clean package of release 1.0.1, unchanged, to show that a CTRES v1.0 package still passes.
+same data cut down to the record types of their conformance level (§10). demo/stream is the stream
+of one gaming day (§8.4) and the level_2 package of that day: the stream tests copy the events file,
+make one change, reseal the checkpoint unless the change is to the checkpoint itself, and assert
+the STM or REC check that reports it. tests/fixtures/clean_1_0 is the clean package of release
+1.0.1, unchanged, to show that a CTRES v1.0 package still passes.
 """
 import contextlib
 import hashlib
@@ -25,14 +28,23 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from ctres_validator_lite import RULES, SCHEMA_VERSION, validate  # noqa: E402
+from ctres_validator_lite import RECONCILE_RULES, RULES, SCHEMA_VERSION, STREAM_RULES, validate, validate_stream  # noqa: E402
 from ctres_validator_lite.cli import main  # noqa: E402
 
 CLEAN, DEFECTS = ROOT / "demo" / "clean", ROOT / "demo" / "defects"
 LEVEL1, LEVEL2 = ROOT / "demo" / "level1", ROOT / "demo" / "level2"
+STREAM, STREAM_PKG = ROOT / "demo" / "stream" / "events.ndjson", ROOT / "demo" / "stream" / "package"
 CLEAN_1_0 = ROOT / "tests" / "fixtures" / "clean_1_0"
 RULE_IDS = [r[0] for r in RULES]
-R13, R14 = "R13_gaming_revenue_statements.jsonl", "R14_venue_counts.jsonl"
+STREAM_IDS, RECONCILE_IDS = [r[0] for r in STREAM_RULES], [r[0] for r in RECONCILE_RULES]
+R13, R14, R15 = "R13_gaming_revenue_statements.jsonl", "R14_venue_counts.jsonl", "R15_bet_events.jsonl"
+STREAM_ID = "XJ/DEMO/0001:all"
+BET1, BET7 = "B-2026-11-14-0001", "B-2026-11-14-0007"
+SPORTS_DAY = "GRS-2026-11-14-XJ-DEMO-0001-SPORTS-ONLINE-EUR"
+# The advisory findings the stream day's level_2 package carries on its own (references the level does not
+# resolve) and, reconciled with its stream, for the R5 checks the stream carries and the package does not.
+STREAM_PKG_ADVISORY = {"REF-01": 1, "REF-02": 1, "REF-03": 2, "REF-05": 1, "REF-08": 1}
+RECONCILE_ADVISORY = STREAM_PKG_ADVISORY | {"REC-01": 1}
 SPORTS, CASINO = "GRS-2026-11-XJ-DEMO-0001-SPORTS-ONLINE-EUR", "GRS-2026-11-XJ-DEMO-0001-CASINO-ONLINE-EUR"
 FLOOR = "GRS-2026-11-XJ-DEMO-0001-CASINO-FLOOR-V-DEMO-01-EUR"
 SLOT = "VC-2026-11-14-V-DEMO-01-SM-0001"
@@ -68,13 +80,31 @@ def load_make_demo():
     return module
 
 
+def serialize(events):
+    return "".join(json.dumps(e, separators=(",", ":"), ensure_ascii=False) + "\n" for e in events)
+
+
+def seal(events):
+    """Recompute the checkpoint among the events from the other events of the stream: the range of their
+    sequences, the count, and the chain hash over their lines as they will be written. Returns the checkpoint."""
+    cp_event = next(e for e in reversed(events) if e.get("record_type") == "checkpoint")
+    lines = {e["sequence"]: json.dumps(e, separators=(",", ":"), ensure_ascii=False)
+             for e in events if e is not cp_event and e.get("stream_id") == cp_event["stream_id"]}
+    first, last = min(lines), max(lines)
+    cp_event["record"].update(first_sequence=first, last_sequence=last, event_count=last - first + 1,
+                              chain_hash=sha256("".join(lines[s] + "\n" for s in sorted(lines))))
+    return cp_event["record"]
+
+
 class PackageCase(unittest.TestCase):
-    """A fresh copy of demo/clean in self.pkg, with helpers to change it."""
+    """A fresh copy of demo/clean (SOURCE) in self.pkg, with helpers to change it."""
+
+    SOURCE = CLEAN
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.pkg = self.tmp / "pkg"
-        shutil.copytree(CLEAN, self.pkg)
+        shutil.copytree(self.SOURCE, self.pkg)
 
     def tearDown(self):
         shutil.rmtree(self.tmp)
@@ -177,7 +207,7 @@ class DemoPackages(unittest.TestCase):
             "file": None, "line": None, "record": None, "field": "authority_figure_ref/report_reference_id",
             "detail": "authority_figure_ref/report_reference_id — not resolved: R12 is not required at level_1 and "
                       "is not in the package", "severity": "advisory"})
-        self.assertEqual(res["summary"], {"checks": 22, "passed": 21, "failed": 1, "not_run": 0,
+        self.assertEqual(res["summary"], {"checks": 23, "passed": 22, "failed": 1, "not_run": 0,
                                           "blocking_findings": 0, "advisory_findings": 1})
         self.assertEqual(check(res, "STR-09")["status"], "pass")
         # level_2: the core, with R14 because the clean R13 has a venue line; every reference to the Custody and
@@ -242,13 +272,19 @@ class DemoPackages(unittest.TestCase):
     def test_demo_packages_are_reproducible(self):
         with tempfile.TemporaryDirectory() as tmp:
             load_make_demo().build(tmp)
-            for package in ("clean", "level1", "level2", "defects"):
-                ours = sorted(p.name for p in (ROOT / "demo" / package).iterdir())
-                theirs = sorted(p.name for p in (Path(tmp) / package).iterdir())
+            for package in ("clean", "level1", "level2", "defects", "stream"):
+                ours = sorted(p.relative_to(ROOT / "demo" / package).as_posix()
+                              for p in (ROOT / "demo" / package).rglob("*") if p.is_file())
+                theirs = sorted(p.relative_to(Path(tmp) / package).as_posix()
+                                for p in (Path(tmp) / package).rglob("*") if p.is_file())
                 self.assertEqual(ours, theirs)
                 for name in ours:
                     self.assertEqual((ROOT / "demo" / package / name).read_bytes(),
                                      (Path(tmp) / package / name).read_bytes(), f"{package}/{name}")
+            self.assertEqual(ours, ["events.ndjson", "package/R13_gaming_revenue_statements.jsonl",
+                                    "package/R15_bet_events.jsonl", "package/R3_deposits.jsonl",
+                                    "package/R4_withdrawals.jsonl", "package/R7_reconciliation_statements.jsonl",
+                                    "package/manifest.json"])
 
 
 # ------------------------------------------------------------------ command line and output
@@ -265,6 +301,27 @@ class CommandLine(unittest.TestCase):
             code, _, err = run_cli(str(CLEAN), "--schema-dir", empty)
             self.assertEqual(code, 2)
             self.assertIn("does not hold the CTRES schema files", err)
+
+    def test_exit_codes_of_stream_and_reconcile_runs(self):
+        self.assertEqual(run_cli("--stream", str(STREAM))[0], 0)
+        self.assertEqual(run_cli("--stream", str(STREAM), "--max-latency", "PT60S")[0], 0)
+        self.assertEqual(run_cli(str(STREAM_PKG), "--reconcile", str(STREAM))[0], 0)
+        self.assertEqual(run_cli("--stream", str(STREAM), "--max-latency", "PT1S")[0], 1)
+        for args, message in (
+                (("--stream", str(ROOT / "no-such.ndjson")), "is not a file"),
+                ((str(STREAM_PKG), "--reconcile", str(ROOT / "no-such.ndjson")), "is not a file"),
+                ((str(CLEAN), "--stream", str(STREAM)), "--stream validates a stream on its own"),
+                (("--stream", str(STREAM), "--reconcile", str(STREAM)), "cannot be combined"),
+                ((str(CLEAN), "--max-latency", "PT60S"), "--max-latency applies with --stream or --reconcile"),
+                (("--stream", str(STREAM), "--max-latency", "60s"), "not an ISO 8601 duration"),
+                (("--stream", str(STREAM), "--max-latency", "P1M"), "not an ISO 8601 duration"),
+                (("--stream", str(STREAM), "--max-latency", "PT"), "not an ISO 8601 duration")):
+            code, out, err = run_cli(*args)
+            self.assertEqual(code, 2, args)
+            self.assertEqual(out, "")
+            self.assertIn(message, err, args)
+        with self.assertRaises(ValueError):
+            validate_stream(STREAM, max_latency="60s")
 
     def test_text_report_is_grouped_by_class_and_prints_the_fingerprint(self):
         code, out, _ = run_cli(str(DEFECTS))
@@ -319,19 +376,22 @@ class CommandLine(unittest.TestCase):
                 self.assertEqual(list(f), ["file", "line", "record", "field", "detail", "severity"])
                 self.assertEqual(f["severity"], c["severity"])      # nothing is downgraded in demo/defects
 
-    def test_json_output_lists_nine_structural_and_thirteen_referential_checks(self):
+    def test_json_output_lists_nine_structural_and_fourteen_referential_checks(self):
         res = json.loads(run_cli(str(CLEAN), "--json")[1])
         self.assertEqual([c["id"] for c in res["checks"]],
-                         [f"STR-0{i}" for i in range(1, 10)] + [f"REF-{i:02d}" for i in range(1, 14)])
-        self.assertEqual(res["summary"], {"checks": 22, "passed": 22, "failed": 0, "not_run": 0,
+                         [f"STR-0{i}" for i in range(1, 10)] + [f"REF-{i:02d}" for i in range(1, 15)])
+        self.assertEqual(res["summary"], {"checks": 23, "passed": 23, "failed": 0, "not_run": 0,
                                           "blocking_findings": 0, "advisory_findings": 0})
         self.assertEqual(res["standard_version"], "1.1")
         self.assertEqual(res["manifest"]["standard_version"], "1.1")
         self.assertEqual(res["manifest"]["conformance_level_declared"], "level_4")
         self.assertEqual({c["id"]: c["severity"] for c in res["checks"] if c["id"] > "REF-08"},
                          {"REF-09": "blocking", "REF-10": "blocking", "REF-11": "blocking", "REF-12": "blocking",
-                          "REF-13": "advisory"} | {f"STR-0{i}": "blocking" for i in range(1, 10)})
+                          "REF-13": "advisory", "REF-14": "blocking"} | {f"STR-0{i}": "blocking" for i in range(1, 10)})
+        self.assertEqual({c["id"]: (c["class"], c["basis"]) for c in res["checks"] if c["id"] == "REF-14"},
+                         {"REF-14": ("referential", "§4.15; §4.1")})
         self.assertIn("money bridge", res["not_checked"])
+        self.assertNotIn("stream", res)
 
     def test_json_output_is_deterministic(self):
         self.assertEqual(run_cli(str(DEFECTS), "--json")[1], run_cli(str(DEFECTS), "--json")[1])
@@ -1258,6 +1318,716 @@ class ValidVariations(PackageCase):
             r.pop("location_id")
         self.edit("R4_withdrawals.jsonl", change)
         self.assertOnly(self.validate(), {})
+
+
+# ------------------------------------------------------------------ R15 Bet Event (Wagering module, v1.1)
+
+class BetEvents(PackageCase):
+    """R15 in a package: the structural checks as they apply to bet events, and REF-14. The fixture is the stream
+    day's level_2 package, the one demonstration package that carries R15."""
+
+    SOURCE = STREAM_PKG
+
+    def bet(self, bet_id, **fields):
+        def change(rs):
+            self.record(rs, "bet_id", bet_id).update(fields)
+        self.edit(R15, change)
+
+    def test_stream_day_package_passes_on_its_own(self):
+        res = self.validate()
+        self.assertAdvisory(res, STREAM_PKG_ADVISORY)
+        self.assertEqual(check(res, "REF-14")["status"], "pass")
+        self.assertEqual(check(res, "STR-09")["status"], "pass")
+        m = self.manifest()
+        self.assertEqual([f["record_type"] for f in m["files"]], ["R3", "R4", "R7", "R13", "R15"])
+        self.assertEqual(m["conformance_level_declared"], "level_2")
+        self.assertEqual(len(m["stream_checkpoints"]), 1)
+        statuses = [json.loads(x)["status"] for x in (self.pkg / R15).read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(statuses, ["settled", "settled", "void", "settled", "settled", "cashed_out", "open"])
+
+    def test_r15_is_required_at_no_level(self):
+        from ctres_validator_lite import LEVELS
+        self.assertTrue(all("R15" not in required for _, required in LEVELS.values()))
+        self.set_level("level_1")                                    # R15 is an extra type at any level
+        self.assertEqual(check(self.validate(), "STR-09")["status"], "pass")
+
+    def test_str04_open_bet_with_winnings(self):
+        self.bet(BET7, winnings="10.00")
+        res = self.validate()
+        self.assertEqual(failed(res).keys() - STREAM_PKG_ADVISORY.keys(), {"STR-04"})
+        self.assertEqual(failed(res)["STR-04"], [{
+            "file": R15, "line": 7, "record": BET7, "field": "winnings", "severity": "blocking",
+            "detail": f"{BET7}: winnings: winnings is absent or zero while status is open"}])
+        self.bet(BET7, winnings="0.00")
+        self.assertAdvisory(self.validate(), STREAM_PKG_ADVISORY)
+
+    def test_str04_open_bet_carrying_settled_at_or_void_reason(self):
+        self.bet(BET7, settled_at="2026-11-14T23:00:00+01:00", void_reason="x")
+        res = self.validate()
+        self.assertEqual([f["field"] for f in failed(res)["STR-04"]], ["settled_at", "void_reason"])
+        self.assertTrue(all("not permitted" in f["detail"] for f in failed(res)["STR-04"]))
+
+    def test_str04_void_bet_without_void_reason(self):
+        def change(rs):
+            del self.record(rs, "status", "void")["void_reason"]
+        self.edit(R15, change)
+        res = self.validate()
+        self.assertEqual(failed(res)["STR-04"][0]["field"], "void_reason")
+        self.assertIn("required field is missing", failed(res)["STR-04"][0]["detail"])
+
+    def test_str04_settled_and_cashed_out_bets_without_settled_at(self):
+        def change(rs):
+            del self.record(rs, "bet_id", BET1)["settled_at"]
+            del self.record(rs, "status", "cashed_out")["settled_at"]
+        self.edit(R15, change)
+        res = self.validate()
+        self.assertEqual([f["field"] for f in failed(res)["STR-04"]], ["settled_at", "settled_at"])
+
+    def test_str04_settled_bet_carrying_void_reason(self):
+        self.bet(BET1, void_reason="x")
+        self.assertEqual(failed(self.validate())["STR-04"][0]["field"], "void_reason")
+
+    def test_str04_undefined_field_on_a_bet(self):
+        self.bet(BET1, player_name="x")
+        self.assertEqual(failed(self.validate())["STR-04"][0]["detail"], f"{BET1}: not defined for this record: player_name")
+
+    def test_str05_and_str06_on_bets(self):
+        self.bet(BET1, status="won")
+        self.bet(BET7, stake=15.0)
+        res = self.validate()
+        self.assertEqual(failed(res)["STR-05"][0]["field"], "status")
+        self.assertEqual(failed(res)["STR-06"][0]["field"], "stake")
+
+    def test_str07_repeated_bet_identifier(self):
+        self.edit(R15, lambda rs: rs.append(dict(rs[0])))
+        self.assertEqual(failed(self.validate())["STR-07"][0]["record"], BET1)
+
+    def test_str08_package_with_r15_must_declare_1_1(self):
+        m = self.manifest()
+        m["standard_version"] = "1.0"
+        self.write_manifest(m)
+        res = self.validate()
+        self.assertEqual(failed(res)["STR-08"][0]["field"], "standard_version")
+
+    def test_ref14_venue_not_resolved_by_level(self):
+        self.bet(BET1, channel="venue", venue_id="V-DEMO-01")
+        res = self.validate()
+        self.assertAdvisory(res, STREAM_PKG_ADVISORY | {"REF-14": 1})
+        self.assertEqual(failed(res)["REF-14"][0], {
+            "file": None, "line": None, "record": None, "field": "venue_id", "severity": "advisory",
+            "detail": "venue_id — not resolved: R1 is not required at level_2 and is not in the package"})
+
+    def test_ref14_venue_resolved_against_r1(self):
+        text = (CLEAN / "R1_funds_locations.jsonl").read_text(encoding="utf-8")
+        (self.pkg / "R1_funds_locations.jsonl").write_text(text, encoding="utf-8")
+        m = self.manifest()
+        m["files"].insert(0, {"file": "R1_funds_locations.jsonl", "record_type": "R1", "record_count": 6, "sha256": sha256(text)})
+        self.write_manifest(m)
+        self.bet(BET1, channel="venue", venue_id="V-DEMO-01")        # the venue whose cage float is in R1
+        res = self.validate()
+        self.assertEqual(check(res, "REF-14")["status"], "pass")
+        self.bet(BET1, venue_id="V-NOWHERE")
+        res = self.validate()
+        self.assertEqual(failed(res)["REF-14"], [{
+            "file": R15, "line": 1, "record": BET1, "field": "venue_id", "severity": "blocking",
+            "detail": f"{BET1}: venue_id V-NOWHERE is carried by no R1 location"}])
+        self.assertEqual(res["result"], "fail")
+
+    def test_ref14_noted_where_no_level_is_declared(self):
+        self.set_level(None)
+        self.bet(BET1, channel="venue", venue_id="V-DEMO-01")
+        res = self.validate()
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "REF-14")["notes"], ["venue_id not resolved: the package carries no R1 file"])
+
+
+# ------------------------------------------------------------------ streams (§8.4)
+
+class StreamCase(unittest.TestCase):
+    """A fresh copy of demo/stream (the events file and the package) in self.tmp, with helpers to change them."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.events = self.tmp / "events.ndjson"
+        self.pkg = self.tmp / "pkg"
+        shutil.copy(STREAM, self.events)
+        shutil.copytree(STREAM_PKG, self.pkg)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp)
+
+    def lines(self):
+        return [x for x in self.events.read_text(encoding="utf-8").split("\n") if x]
+
+    def write_lines(self, lines):
+        self.events.write_text("".join(x + "\n" for x in lines), encoding="utf-8")
+
+    def read(self):
+        return [json.loads(x) for x in self.lines()]
+
+    def edit(self, change, reseal=True, manifest=False):
+        """Apply change(events) to the events, then reseal the checkpoint (and, with manifest, copy it into the
+        package manifest's stream_checkpoints) unless the change is to the checkpoint itself."""
+        events = self.read()
+        change(events)
+        if reseal:
+            cp = seal(events)
+            if manifest:
+                m = self.manifest()
+                m["stream_checkpoints"] = [cp]
+                self.write_manifest(m)
+        self.events.write_text(serialize(events), encoding="utf-8")
+
+    def event(self, events, sequence):
+        return next(e for e in events if e["sequence"] == sequence)
+
+    def manifest(self):
+        return json.loads((self.pkg / "manifest.json").read_text(encoding="utf-8"))
+
+    def write_manifest(self, manifest):
+        (self.pkg / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    def edit_package(self, name, change):
+        """Apply change(records) to a package file, then reseal the manifest."""
+        path = self.pkg / name
+        records = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+        change(records)
+        text = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in records)
+        path.write_text(text, encoding="utf-8")
+        m = self.manifest()
+        for f in m["files"]:
+            if f["file"] == name:
+                f["sha256"], f["record_count"] = sha256(text), len(records)
+        self.write_manifest(m)
+
+    def stream(self, max_latency=None):
+        return validate_stream(self.events, max_latency=max_latency)
+
+    def reconcile(self, max_latency=None):
+        return validate(self.pkg, reconcile=self.events, max_latency=max_latency)
+
+    def assertOnly(self, result, expected):
+        self.assertEqual({k: len(v) for k, v in failed(result).items()}, expected, json.dumps(failed(result), indent=1))
+
+
+class StreamChecks(StreamCase):
+
+    def test_demo_stream_passes(self):
+        res = validate_stream(STREAM)
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual(failed(res), {})
+        self.assertEqual(res["summary"], {"checks": 7, "passed": 6, "failed": 0, "not_run": 1,
+                                          "blocking_findings": 0, "advisory_findings": 0})
+        self.assertEqual(check(res, "STM-07")["status"], "not_run")
+        self.assertEqual(check(res, "STM-07")["notes"], ["not run: no maximum latency given (--max-latency)"])
+        self.assertTrue(all(c["status"] == "pass" and not c["notes"] for c in res["checks"] if c["id"] != "STM-07"))
+        self.assertEqual(res["stream"], {
+            "path": str(STREAM), "fingerprint": sha256(STREAM.read_bytes()), "lines": 26, "events": 26, "checkpoints": 1,
+            "streams": {STREAM_ID: {"first_sequence": 1, "last_sequence": 26, "events": 26, "checkpoints": 1}},
+            "record_types": {"R3": 4, "R4": 2, "R5": 6, "R13": 3, "R15": 10, "checkpoint": 1}, "max_latency": None})
+        code, out, _ = run_cli("--stream", str(STREAM))
+        self.assertEqual(code, 0)
+        self.assertIn("Stream validation (CTRES v1.1, §8.4)", out)
+        self.assertIn(f"events       26 events in 1 stream ({STREAM_ID}, sequences 1 to 26), 1 checkpoint", out)
+        self.assertIn("max latency  not set: STM-07 not run", out)
+        self.assertIn("\nStream: 7 checks, 6 passed, 0 failed, 1 not run", out)
+        self.assertIn(f"Result: PASS: no blocking findings, 0 advisory; 26 events in 1 stream ({STREAM_ID}, "
+                      "sequences 1 to 26), 1 checkpoint.", out)
+        self.assertNotIn("Structural:", out)
+
+    def test_demo_stream_content(self):
+        events = [json.loads(x) for x in STREAM.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([e["sequence"] for e in events], list(range(1, 27)))
+        self.assertEqual({e["stream_id"] for e in events}, {STREAM_ID})
+        self.assertEqual({e["licence_number"] for e in events}, {"XJ/DEMO/0001"})
+        ops = [(e["record_type"], e["op"]) for e in events]
+        self.assertEqual(ops.count(("R15", "create")), 7)
+        self.assertEqual(ops.count(("R15", "update")), 3)
+        bets = {e["record"]["bet_id"]: e["record"] for e in events if e["record_type"] == "R15" and e["op"] == "update"}
+        self.assertEqual({b: r["status"] for b, r in bets.items()},
+                         {BET1: "settled", "B-2026-11-14-0003": "void", "B-2026-11-14-0006": "cashed_out"})
+        kinds = [e["record"]["statement_kind"] for e in events if e["record_type"] == "R13"]
+        self.assertEqual(kinds, ["interim", "period", "period"])
+        self.assertEqual(ops[-1], ("checkpoint", "create"))
+        cp = events[-1]["record"]
+        self.assertEqual((cp["first_sequence"], cp["last_sequence"], cp["event_count"]), (1, 25, 25))
+        self.assertEqual(cp["chain_hash"], sha256("".join(x + "\n" for x in STREAM.read_text(encoding="utf-8").splitlines()[:25])))
+        self.assertEqual(json.loads((STREAM_PKG / "manifest.json").read_text(encoding="utf-8"))["stream_checkpoints"], [cp])
+        from ctres_validator_lite.validator import parse_dt
+        emitted = [parse_dt(e["emitted_at"]) for e in events]
+        self.assertTrue(all(a <= b for a, b in zip(emitted, emitted[1:])))     # emitted in sequence order
+
+    def test_stream_json_output_shape(self):
+        code, out, _ = run_cli("--stream", str(STREAM), "--json")
+        self.assertEqual(code, 0)
+        res = json.loads(out)
+        self.assertEqual(list(res), ["validator", "validator_version", "standard_version", "schema_version",
+                                     "schema_dir", "stream", "result", "summary", "checks", "not_checked"])
+        self.assertEqual([c["id"] for c in res["checks"]], STREAM_IDS)
+        self.assertEqual({c["class"] for c in res["checks"]}, {"stream"})
+        self.assertEqual({c["id"]: c["severity"] for c in res["checks"]},
+                         {"STM-01": "blocking", "STM-02": "blocking", "STM-03": "blocking", "STM-04": "blocking",
+                          "STM-05": "blocking", "STM-06": "advisory", "STM-07": "blocking"})
+        self.assertEqual({c["basis"] for c in res["checks"]}, {"§8.4"})
+        self.assertEqual(out, run_cli("--stream", str(STREAM), "--json")[1])
+        self.assertIn("--reconcile", res["not_checked"])
+
+    def test_stm01_line_that_is_not_json_or_not_an_object(self):
+        self.write_lines(self.lines() + ["{not json", "[1, 2]"])
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 2})
+        self.assertEqual([(f["line"], f["detail"][:14]) for f in failed(res)["STM-01"]],
+                         [(27, "not valid JSON"), (28, "not a JSON obj")])
+        self.assertEqual(res["stream"]["lines"], 28)
+        self.assertEqual(res["stream"]["events"], 26)
+
+    def test_stm01_envelope_field_missing_or_undefined(self):
+        def change(events):
+            del self.event(events, 3)["emitted_at"]
+            self.event(events, 4)["signature"] = "abc"
+            self.event(events, 5)["standard_version"] = "1.0"
+        self.edit(change)
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 3})
+        self.assertEqual([f["detail"] for f in failed(res)["STM-01"]], [
+            f"sequence 3 ({BET1}): emitted_at: required field is missing",
+            "sequence 4 (B-2026-11-14-0002): not defined for the envelope: signature",
+            "sequence 5 (C-2026-11-1002): standard_version: '1.0' is not one of ['1.1']"])
+        self.assertEqual([f["field"] for f in failed(res)["STM-01"]], ["emitted_at", None, "standard_version"])
+        self.assertEqual(run_cli("--stream", str(self.events))[0], 1)
+
+    def test_stm01_sequence_0(self):
+        self.edit(lambda events: events[0].update(sequence=0), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 1, "STM-05": 1})
+        self.assertEqual(failed(res)["STM-01"][0]["detail"], "sequence: 0 is less than the minimum of 1")
+        self.assertIn("sequence 1 of stream XJ/DEMO/0001:all, covered by the checkpoint, was not seen",
+                      failed(res)["STM-05"][0]["detail"])
+
+    def test_stm01_unknown_record_type_and_op(self):
+        def change(events):
+            self.event(events, 1)["record_type"] = "R16"
+            self.event(events, 2)["op"] = "delete"
+        self.edit(change)
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 2})
+        self.assertEqual(failed(res)["STM-01"][0]["detail"][:46], "sequence 1: record_type: 'R16' is not one of [")
+        self.assertEqual(failed(res)["STM-01"][1]["detail"],
+                         "sequence 2 (D-2026-11-0021): op: 'delete' is not one of ['create', 'update', 'void']")
+
+    def test_stm01_checkpoint_event_with_op_update(self):
+        self.edit(lambda events: events[-1].update(op="update"), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 1, "STM-05": 2})               # no checkpoint registered: two days uncovered
+        self.assertEqual(failed(res)["STM-01"][0]["detail"],
+                         "sequence 26: op update is not permitted on a checkpoint event: a checkpoint carries op create")
+        self.assertTrue(all(f["severity"] == "advisory" for f in failed(res)["STM-05"]))
+
+    def test_stm02_gap(self):
+        self.edit(lambda events: events.remove(self.event(events, 5)))
+        res = self.stream()
+        self.assertOnly(res, {"STM-02": 1, "STM-05": 1})
+        self.assertEqual(failed(res)["STM-02"][0], {
+            "file": "events.ndjson", "line": 5, "record": "D-2026-11-0022", "field": "sequence", "severity": "blocking",
+            "detail": "sequence 6 (D-2026-11-0022): sequence 5 of stream XJ/DEMO/0001:all is missing between line 4 "
+                      "(sequence 4) and line 5"})
+        self.assertEqual(failed(res)["STM-05"][0]["detail"],
+                         "sequence 26: sequence 5 of stream XJ/DEMO/0001:all, covered by the checkpoint, was not seen; "
+                         "chain_hash not recomputed")
+        self.assertEqual(res["result"], "fail")
+
+    def test_stm02_gap_of_several_sequences(self):
+        self.edit(lambda events: [events.remove(self.event(events, s)) for s in (5, 6, 7)])
+        res = self.stream()
+        self.assertIn("sequences 5 to 7 of stream XJ/DEMO/0001:all are missing between line 4 (sequence 4) and line 5",
+                      failed(res)["STM-02"][0]["detail"])
+        self.assertIn("sequences 5 to 7 of stream XJ/DEMO/0001:all, covered by the checkpoint, were not seen",
+                      failed(res)["STM-05"][0]["detail"])
+
+    def test_stm02_sequences_that_go_backwards(self):
+        def change(events):
+            events[9], events[10] = events[10], events[9]           # sequence 11 before sequence 10
+        self.edit(change)
+        res = self.stream()
+        self.assertOnly(res, {"STM-02": 2})
+        self.assertEqual([f["detail"].split(": ", 1)[1] for f in failed(res)["STM-02"]], [
+            "sequence 10 of stream XJ/DEMO/0001:all is missing between line 9 (sequence 9) and line 10",
+            "follows sequence 11 (line 10) of stream XJ/DEMO/0001:all: sequences do not increase"])
+
+    def test_stm02_a_second_stream_is_tracked_on_its_own(self):
+        def change(events):
+            counts = {"XJ/DEMO/0001:R5": 0, STREAM_ID: 0}            # the R5 checks move to a stream of their own
+            for e in events:
+                e["stream_id"] = "XJ/DEMO/0001:R5" if e["record_type"] == "R5" else STREAM_ID
+                counts[e["stream_id"]] += 1
+                e["sequence"] = counts[e["stream_id"]]
+        self.edit(change)                                            # reseals the checkpoint of stream :all
+        res = self.stream()
+        self.assertOnly(res, {"STM-05": 1})                          # the R5 stream has no checkpoint: advisory
+        self.assertEqual(failed(res)["STM-05"][0]["detail"],
+                         "stream XJ/DEMO/0001:R5: 6 events of 2026-11-14 (sequences 1 to 6) are covered by no checkpoint")
+        self.assertEqual(res["stream"]["streams"], {
+            STREAM_ID: {"first_sequence": 1, "last_sequence": 20, "events": 20, "checkpoints": 1},
+            "XJ/DEMO/0001:R5": {"first_sequence": 1, "last_sequence": 6, "events": 6, "checkpoints": 0}})
+        self.assertEqual(check(res, "STM-02")["status"], "pass")
+        self.assertEqual(res["result"], "pass")
+
+    def test_stm03_redelivery_with_identical_bytes_is_advisory(self):
+        lines = self.lines()
+        self.write_lines(lines[:7] + [lines[6]] + lines[7:])
+        res = self.stream()
+        self.assertOnly(res, {"STM-03": 1})
+        self.assertEqual(failed(res)["STM-03"][0], {
+            "file": "events.ndjson", "line": 8, "record": "B-2026-11-14-0003", "field": None, "severity": "advisory",
+            "detail": "sequence 7 (B-2026-11-14-0003): repeats line 7 with identical content: a redelivery, ignored"})
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual((res["stream"]["lines"], res["stream"]["events"]), (27, 26))
+        self.assertEqual(run_cli("--stream", str(self.events))[0], 0)
+
+    def test_stm03_repeat_with_different_bytes_is_blocking(self):
+        lines = self.lines()
+        copy = json.loads(lines[6])
+        copy["emitted_at"] = "2026-11-14T11:50:09+01:00"
+        self.write_lines(lines[:7] + [json.dumps(copy, separators=(",", ":"))] + lines[7:])
+        res = self.stream()
+        self.assertOnly(res, {"STM-03": 1})
+        self.assertEqual(failed(res)["STM-03"][0]["detail"], "sequence 7 (B-2026-11-14-0003): repeats line 7 with different content")
+        self.assertEqual(failed(res)["STM-03"][0]["severity"], "blocking")
+        self.assertEqual(res["result"], "fail")
+
+    def test_stm04_record_that_fails_its_schema(self):
+        def change(events):
+            del self.event(events, 2)["record"]["tx_id"]              # an R3 deposit
+            self.event(events, 6)["record"]["colour"] = "blue"        # an R3 deposit with an undefined field
+            self.event(events, 3)["record"]["winnings"] = "10.00"     # an open bet
+        self.edit(change)
+        res = self.stream()
+        self.assertOnly(res, {"STM-04": 3})
+        self.assertEqual([(f["field"], f["detail"]) for f in failed(res)["STM-04"]], [
+            ("record/tx_id", "sequence 2: record/tx_id: required field is missing"),
+            ("record/winnings", f"sequence 3 ({BET1}): record/winnings: winnings is absent or zero while status is open"),
+            ("record/colour", "sequence 6 (D-2026-11-0022): not defined for this record: colour")])
+
+    def test_stm04_record_validated_by_record_type_not_by_content(self):
+        self.edit(lambda events: self.event(events, 2).update(record_type="R4"))    # an R3 record said to be R4
+        res = self.stream()
+        self.assertEqual(set(failed(res)), {"STM-04"})
+        self.assertTrue(all(f["detail"].startswith("sequence 2 (D-2026-11-0021): ") for f in failed(res)["STM-04"]))
+
+    def test_stm04_void_needs_only_the_identifier(self):
+        def change(events):
+            e = self.event(events, 13)                                 # the update of BET1 to settled
+            e.update(op="void", record={"bet_id": BET1}, reason="Placed in error; withdrawn")
+        self.edit(change)
+        self.assertOnly(self.stream(), {})
+        self.edit(lambda events: self.event(events, 13).update(record={}))
+        res = self.stream()
+        self.assertOnly(res, {"STM-04": 1})
+        self.assertEqual(failed(res)["STM-04"][0]["detail"],
+                         "sequence 13: op void: the record carries no bet_id, the identifier of an R15 record")
+
+    def test_stm04_checkpoint_record_that_fails_its_schema(self):
+        self.edit(lambda events: events[-1]["record"].pop("chain_hash"), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-04": 1, "STM-05": 2})
+        self.assertEqual(failed(res)["STM-04"][0]["detail"], "sequence 26: record/chain_hash: required field is missing")
+        self.assertEqual(res["stream"]["checkpoints"], 0)
+
+    def test_stm05_event_count_and_chain_hash(self):
+        self.edit(lambda events: events[-1]["record"].update(event_count=24), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-05": 1})
+        self.assertEqual(failed(res)["STM-05"][0]["detail"],
+                         "sequence 26: event_count 24 differs from last_sequence − first_sequence + 1 = 25")
+        self.assertEqual(failed(res)["STM-05"][0]["field"], "record/event_count")
+        self.edit(lambda events: events[-1]["record"].update(event_count=25, chain_hash="0" * 64), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-05": 1})
+        expected = sha256("".join(x + "\n" for x in self.lines()[:25]))
+        self.assertEqual(failed(res)["STM-05"][0]["detail"],
+                         f"sequence 26: chain_hash {'0' * 64} is not the SHA-256 of the event lines 1 to 25 of stream "
+                         f"XJ/DEMO/0001:all as transmitted, {expected}")
+
+    def test_stm05_chain_hash_covers_the_lines_as_transmitted(self):
+        # A change to a record's content that keeps the record valid still breaks the chain hash.
+        self.edit(lambda events: self.event(events, 2)["record"].update(amount="50.01"), reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {"STM-05": 1})
+        self.assertIn("is not the SHA-256 of the event lines", failed(res)["STM-05"][0]["detail"])
+        # Line endings are not part of the line: CRLF files hash the same.
+        self.edit(lambda events: None)
+        self.events.write_bytes(self.events.read_bytes().replace(b"\n", b"\r\n"))
+        self.assertOnly(self.stream(), {})
+
+    def test_stm05_day_with_events_but_no_checkpoint_is_advisory(self):
+        self.write_lines(self.lines()[:-1])
+        res = self.stream()
+        self.assertOnly(res, {"STM-05": 2})
+        self.assertEqual([f["detail"] for f in failed(res)["STM-05"]], [
+            "stream XJ/DEMO/0001:all: 23 events of 2026-11-14 (sequences 1 to 23) are covered by no checkpoint",
+            "stream XJ/DEMO/0001:all: 2 events of 2026-11-15 (sequences 24 to 25) are covered by no checkpoint"])
+        self.assertTrue(all(f["severity"] == "advisory" for f in failed(res)["STM-05"]))
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual(run_cli("--stream", str(self.events))[0], 0)
+
+    def test_stm05_checkpoint_of_another_stream(self):
+        self.edit(lambda events: events[-1]["record"].update(stream_id="OTHER"), reseal=False)
+        res = self.stream()
+        self.assertEqual(set(failed(res)), {"STM-05"})
+        self.assertEqual(failed(res)["STM-05"][0]["detail"],
+                         "sequence 26: the checkpoint names stream OTHER but was emitted on stream XJ/DEMO/0001:all")
+        self.assertEqual([f["severity"] for f in failed(res)["STM-05"]], ["blocking", "blocking", "advisory", "advisory"])
+
+    def test_stm05_checkpoint_of_a_period_without_events(self):
+        def change(events):
+            cp = dict(events[-1]["record"], period_start="2026-11-15T00:00:00+01:00", period_end="2026-11-15T23:59:59+01:00",
+                      first_sequence=27, last_sequence=26, event_count=0, chain_hash=sha256(b""),
+                      generated_at="2026-11-16T00:00:30+01:00")
+            events.append(dict(events[-1], sequence=27, emitted_at=cp["generated_at"], record=cp))
+        self.edit(change, reseal=False)
+        res = self.stream()
+        self.assertOnly(res, {})
+        self.assertEqual(res["stream"]["checkpoints"], 2)
+
+    def test_stm06_update_of_a_record_no_event_created(self):
+        self.edit(lambda events: self.event(events, 13)["record"].update(bet_id="B-NOWHERE"))
+        res = self.stream()
+        self.assertOnly(res, {"STM-06": 1})
+        self.assertEqual(failed(res)["STM-06"][0], {
+            "file": "events.ndjson", "line": 13, "record": "B-NOWHERE", "field": "record/bet_id", "severity": "advisory",
+            "detail": "sequence 13 (B-NOWHERE): op update names an R15 record no earlier event of stream "
+                      "XJ/DEMO/0001:all created (the create may predate the file)"})
+        self.assertEqual(res["result"], "pass")
+
+    def test_stm06_void_of_a_record_no_event_created_and_create_after_update(self):
+        def change(events):
+            self.event(events, 13).update(op="void", record={"bet_id": "B-NOWHERE"}, reason="withdrawn")
+            events[2], events[12] = events[12], events[2]            # wait: swapping changes sequences too
+        # swap the sequences back so that the file order, not the numbering, is what changes
+        events = self.read()
+        change(events)
+        events[2]["sequence"], events[12]["sequence"] = 3, 13
+        seal(events)
+        self.events.write_text(serialize(events), encoding="utf-8")
+        res = self.stream()
+        self.assertEqual([f["detail"][:40] for f in failed(res)["STM-06"]], ["sequence 3 (B-NOWHERE): op void names an"])
+        self.assertEqual(res["result"], "pass")
+
+    def test_stm07_latency(self):
+        res = self.stream("PT60S")
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "STM-07")["status"], "pass")
+        self.assertEqual(res["stream"]["max_latency"], "PT60S")
+        self.assertIn("max latency  PT60S", run_cli("--stream", str(self.events), "--max-latency", "PT60S")[1])
+        self.assertOnly(self.stream("P1D"), {})
+        res = self.stream("PT1S")                                     # R5 checks are emitted one second after
+        self.assertOnly(res, {"STM-07": 19})
+        self.assertEqual(failed(res)["STM-07"][0], {
+            "file": "events.ndjson", "line": 2, "record": "D-2026-11-0021", "field": "emitted_at", "severity": "blocking",
+            "detail": "sequence 2 (D-2026-11-0021): emitted_at 2026-11-14T09:12:06+01:00 is 0:00:02 after credited_at "
+                      "2026-11-14T09:12:04+01:00, more than the maximum latency PT1S"})
+        self.assertEqual({f["detail"].split(" after ")[1].split(" ")[0] for f in failed(res)["STM-07"]},
+                         {"credited_at", "paid_at", "placed_at", "settled_at", "period_end"})
+        self.assertEqual(res["result"], "fail")
+        self.assertEqual(run_cli("--stream", str(self.events), "--max-latency", "PT1S")[0], 1)
+
+    def test_stm07_anchors_of_bets_and_snapshots(self):
+        # An update settles the bet: its anchor is settled_at, not placed_at; a create of an open bet, placed_at.
+        res = self.stream("PT2S")
+        self.assertEqual({f["record"] for f in failed(res)["STM-07"]}, {SPORTS_DAY, SPORTS_DAY + "-INTERIM-1200",
+                                                                         "GRS-2026-11-14-XJ-DEMO-0001-CASINO-ONLINE-EUR"})
+        self.assertTrue(all("after period_end" in f["detail"] for f in failed(res)["STM-07"]))
+
+    def test_stm07_record_types_without_an_anchor_are_noted(self):
+        location = json.loads((CLEAN / "R1_funds_locations.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        self.edit(lambda events: self.event(events, 1).update(record_type="R1", record=location))
+        res = self.stream("PT60S")
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "STM-07")["notes"],
+                         ["R1 events are not tested: R1 is streamed on creation and change and has no anchor timestamp"])
+
+    def test_stream_output_is_utf8_and_a_byte_order_mark_is_reported_once(self):
+        self.events.write_bytes(b"\xef\xbb\xbf" + self.events.read_bytes())
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 1})
+        self.assertIn("byte order mark", failed(res)["STM-01"][0]["detail"])
+        self.assertEqual(res["stream"]["events"], 26)                # the rest of the file is read as usual
+
+    def test_stream_that_is_not_utf8_stops_the_other_checks(self):
+        self.events.write_bytes(b"\xff\xfe" + self.events.read_bytes())
+        res = self.stream()
+        self.assertOnly(res, {"STM-01": 1})
+        self.assertEqual({c["status"] for c in res["checks"] if c["id"] != "STM-01"}, {"not_run"})
+        self.assertEqual(run_cli("--stream", str(self.events))[0], 1)
+
+
+class ReconcileChecks(StreamCase):
+    """REC-01 to REC-04: the stream day's package against its stream (§8.4; §11)."""
+
+    def test_demo_package_reconciles_with_its_stream(self):
+        res = validate(STREAM_PKG, reconcile=STREAM)
+        self.assertEqual(res["result"], "pass")
+        self.assertEqual({k: len(v) for k, v in failed(res).items()}, RECONCILE_ADVISORY)
+        self.assertTrue(all(f["severity"] == "advisory" for fs in failed(res).values() for f in fs))
+        self.assertEqual(res["summary"], {"checks": 34, "passed": 27, "failed": 6, "not_run": 1,
+                                          "blocking_findings": 0, "advisory_findings": 7})
+        self.assertEqual(failed(res)["REC-01"], [{
+            "file": None, "line": None, "record": None, "field": None, "severity": "advisory",
+            "detail": "R5 records — not reconciled: R5 is not required at level_2 and is not in the package"}])
+        self.assertEqual(check(res, "REC-01")["notes"],
+                         ["1 R13 interim statement is superseded by the period statement and not expected in the package"])
+        self.assertEqual(check(res, "REC-02")["notes"], ["R7 is not streamed: its records are not reconciled"])
+        self.assertEqual([c["id"] for c in res["checks"]], RULE_IDS + STREAM_IDS + RECONCILE_IDS)
+        self.assertEqual([c["class"] for c in res["checks"] if c["id"] in RECONCILE_IDS], ["reconciliation"] * 4)
+        self.assertEqual({c["basis"] for c in res["checks"] if c["id"] in RECONCILE_IDS}, {"§8.4; §11"})
+        self.assertEqual(list(res), ["validator", "validator_version", "standard_version", "schema_version",
+                                     "schema_dir", "package", "fingerprint", "manifest", "stream", "result",
+                                     "summary", "checks", "not_checked"])
+        self.assertEqual(res["stream"]["events"], 26)
+        code, out, _ = run_cli(str(STREAM_PKG), "--reconcile", str(STREAM))
+        self.assertEqual(code, 0)
+        self.assertIn(", reconciled with a stream (§8.4)", out)
+        self.assertIn(f"stream       {STREAM}: 26 events in 1 stream ({STREAM_ID}, sequences 1 to 26), 1 checkpoint", out)
+        self.assertLess(out.index("\nReferential:"), out.index("\nStream:"))
+        self.assertLess(out.index("\nStream:"), out.index("\nReconciliation: 4 checks, 3 passed, 1 failed"))
+        self.assertIn("  REC-01  FAIL  advisory  1 finding  Streamed records are absent from the package (§8.4; §11)", out)
+        self.assertIn(f"Result: PASS: no blocking findings, 7 advisory; declared level_2 (Evidence); reconciled with "
+                      f"{STREAM} (26 events, 1 checkpoint).", out)
+        self.assertEqual(out, run_cli(str(STREAM_PKG), "--reconcile", str(STREAM))[1])
+
+    def test_rec01_streamed_record_absent_from_the_package(self):
+        self.edit_package(R15, lambda rs: rs.remove(next(r for r in rs if r["bet_id"] == BET7)))
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-01": 2})
+        self.assertEqual(failed(res)["REC-01"][0], {
+            "file": "events.ndjson", "line": 22, "record": BET7, "field": "record/bet_id", "severity": "blocking",
+            "detail": f"sequence 22 ({BET7}): the final state of this R15 record is not in the package"})
+        self.assertEqual(res["result"], "fail")
+        self.assertEqual(run_cli(str(self.pkg), "--reconcile", str(self.events))[0], 1)
+
+    def test_rec01_withdrawn_record_is_not_expected_in_the_package(self):
+        def change(events):
+            e = self.event(events, 13)
+            e.update(op="void", record={"bet_id": BET1}, reason="Placed in error; withdrawn")
+        self.edit(change, manifest=True)
+        res = self.reconcile()                                       # BET1 is still in the package
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-03": 1})
+        self.assertEqual(failed(res)["REC-03"][0], {
+            "file": R15, "line": 1, "record": BET1, "field": None, "severity": "blocking",
+            "detail": f"{BET1}: withdrawn by op void (sequence 13) but carried by the package"})
+        self.edit_package(R15, lambda rs: rs.remove(next(r for r in rs if r["bet_id"] == BET1)))
+        self.assertOnly(self.reconcile(), RECONCILE_ADVISORY)      # withdrawn and absent: nothing to report
+
+    def test_rec01_streamed_type_the_package_does_not_carry(self):
+        m = self.manifest()
+        del m["conformance_level_declared"]
+        self.write_manifest(m)
+        res = self.reconcile()                                       # no level: the R5 checks are noted, not reported
+        self.assertOnly(res, {})
+        self.assertEqual(check(res, "REC-01")["notes"][:1], ["1 R13 interim statement is superseded by the period "
+                                                             "statement and not expected in the package"])
+        self.assertIn("R5 records not reconciled: the package carries no R5 file", check(res, "REC-01")["notes"])
+        m["conformance_level_declared"] = "level_4"                  # a level that requires R5: STR-09 reports it
+        self.write_manifest(m)
+        res = self.reconcile()
+        self.assertEqual(set(failed(res)), {"STR-09"})                 # the references the level requires are noted
+        self.assertIn("R5 records not reconciled: the package carries no R5 file", check(res, "REC-01")["notes"])
+
+    def test_rec02_package_record_never_streamed(self):
+        def change(rs):
+            extra = dict(rs[0], tx_id="D-2026-11-0099", rail_reference="7499999100000000000000099", ledger_entry_ref="LE-X")
+            rs.append(extra)
+        self.edit_package("R3_deposits.jsonl", change)
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-02": 1})
+        self.assertEqual(failed(res)["REC-02"][0], {
+            "file": "R3_deposits.jsonl", "line": 5, "record": "D-2026-11-0099", "field": None, "severity": "blocking",
+            "detail": "D-2026-11-0099: never streamed"})
+
+    def test_rec02_record_type_not_streamed_is_noted(self):
+        self.assertEqual(check(self.reconcile(), "REC-02")["notes"], ["R7 is not streamed: its records are not reconciled"])
+
+    def test_rec03_package_record_differs_from_its_final_state(self):
+        def change(rs):
+            r = next(r for r in rs if r["bet_id"] == BET1)
+            r["winnings"] = "37.00"
+            del r["odds"]
+        self.edit_package(R15, change)
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-03": 1})
+        self.assertEqual(failed(res)["REC-03"][0]["detail"],
+                         f"{BET1}: differs from the final streamed state (sequence 13): winnings 37.00 in the package, "
+                         "36.00 in the stream; odds absent from the package, 1.80 in the stream")
+
+    def test_rec03_compares_the_latest_state_of_the_stream(self):
+        # The open state (sequence 3) differs from the package; the update (sequence 13) is what counts.
+        self.edit(lambda events: self.event(events, 3)["record"].update(stake="21.00"), manifest=True)
+        self.assertOnly(self.reconcile(), RECONCILE_ADVISORY)
+        self.edit(lambda events: self.event(events, 13)["record"].update(stake="21.00"), manifest=True)
+        res = self.reconcile()
+        self.assertEqual(failed(res)["REC-03"][0]["detail"],
+                         f"{BET1}: differs from the final streamed state (sequence 13): stake 20.00 in the package, 21.00 in the stream")
+
+    def test_rec03_nested_values_and_many_fields(self):
+        def change(rs):
+            r = rs[0]
+            for k in ("amount", "amount_reporting_ccy", "credited_amount", "fx_rate", "fx_source", "outcome", "limit_check"):
+                r[k] = "x"
+            r["fees"]["rail"] = "1.00"
+        self.edit_package("R3_deposits.jsonl", change)
+        res = self.reconcile()
+        detail = failed(res)["REC-03"][0]["detail"]
+        self.assertIn("amount x in the package, 50.00 in the stream", detail)
+        self.assertTrue(detail.endswith("; and 2 more fields"), detail)
+        self.assertIn("STR-05", failed(res))                        # outcome x is also a schema error
+
+    def test_rec04_manifest_checkpoint_differs(self):
+        m = self.manifest()
+        m["stream_checkpoints"][0]["chain_hash"] = "0" * 64
+        self.write_manifest(m)
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-04": 1})
+        cp = json.loads(self.lines()[-1])["record"]
+        self.assertEqual(failed(res)["REC-04"][0], {
+            "file": "manifest.json", "line": None, "record": None, "field": "stream_checkpoints/0", "severity": "blocking",
+            "detail": f"stream_checkpoints/0 (stream {STREAM_ID}, sequences 1 to 25) differs from the checkpoint the stream "
+                      f"carries (sequence 26): chain_hash {'0' * 64} in the manifest, {cp['chain_hash']} in the stream"})
+
+    def test_rec04_manifest_without_the_streams_checkpoint(self):
+        m = self.manifest()
+        del m["stream_checkpoints"]
+        self.write_manifest(m)
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"REC-04": 1})
+        self.assertEqual(failed(res)["REC-04"][0], {
+            "file": "events.ndjson", "line": 26, "record": None, "field": "record", "severity": "blocking",
+            "detail": f"sequence 26: the checkpoint (stream {STREAM_ID}, sequences 1 to 25) is not listed in the "
+                      "manifest's stream_checkpoints, which the manifest does not carry"})
+        m["stream_checkpoints"] = [dict(json.loads(self.lines()[-1])["record"], first_sequence=26, last_sequence=30,
+                                        event_count=5)]
+        self.write_manifest(m)
+        res = self.reconcile()
+        self.assertEqual([f["detail"] for f in failed(res)["REC-04"]], [
+            f"stream_checkpoints/0 (stream {STREAM_ID}, sequences 26 to 30): the stream carries no such checkpoint",
+            f"sequence 26: the checkpoint (stream {STREAM_ID}, sequences 1 to 25) is not listed in the manifest's "
+            "stream_checkpoints"])
+
+    def test_reconcile_reports_the_stream_checks_too(self):
+        self.write_lines(self.lines() + ["{not json"])
+        res = self.reconcile()
+        self.assertOnly(res, RECONCILE_ADVISORY | {"STM-01": 1})
+        self.assertEqual(res["result"], "fail")
+        res = self.reconcile(max_latency="PT60S")
+        self.assertEqual(check(res, "STM-07")["status"], "pass")
+        self.assertIn("max latency  PT60S", run_cli(str(self.pkg), "--reconcile", str(self.events), "--max-latency", "PT60S")[1])
+
+    def test_reconcile_json_output_carries_the_stream(self):
+        code, out, _ = run_cli(str(STREAM_PKG), "--reconcile", str(STREAM), "--json")
+        self.assertEqual(code, 0)
+        res = json.loads(out)
+        self.assertEqual(res["stream"]["path"], str(STREAM))
+        self.assertEqual(res["stream"]["fingerprint"], sha256(STREAM.read_bytes()))
+        self.assertEqual({c["class"] for c in res["checks"]}, {"structural", "referential", "stream", "reconciliation"})
 
 
 # ------------------------------------------------------------------ schema

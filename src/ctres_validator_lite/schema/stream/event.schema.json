@@ -1,0 +1,446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.1/stream/event.schema.json",
+  "title": "CTRES v1.1 stream event",
+  "description": "One event of a CTRES stream (§8.4): a record of the Standard, exactly as it would appear in a package, in an envelope that names the stream, the sequence number, the licence, the record type and the operation. A stream is NDJSON, one event per line, and carries the same records as the period package, as they occur; the package remains the signed close of the period and must agree with the stream (§8.4; §11). Delivery is at least once: a receiver ignores a repeated (stream_id, sequence) with identical bytes and reports one with different bytes. Integrity rests on the transport, the sequence numbers and the checkpoint of each gaming day (checkpoint.schema.json); no event is hashed or signed on its own.",
+  "type": "object",
+  "properties": {
+    "stream_id": {
+      "description": "Identifier of the stream, free text; <licence_number>:<record_type> or <licence_number>:all is recommended (§8.4).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "sequence": {
+      "description": "Position of the event in its stream: an integer from 1, strictly increasing from event to event, without gaps (§8.4).",
+      "x-ctres-req": "M",
+      "type": "integer",
+      "minimum": 1
+    },
+    "emitted_at": {
+      "description": "When the event was emitted; the profile's latency parameter bounds the delay from the record's anchor timestamp (§8.4; §5 Submission latency).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "licence_number": {
+      "description": "Licence the event reports under, as in the manifest (§8.4; §8.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "standard_version": {
+      "description": "Version of the Standard the event and its record conform to (§13 Versioning); the stream envelope is defined in v1.1.",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "1.1"
+      ]
+    },
+    "profile_id": {
+      "description": "Identifier of the jurisdiction profile applied, as in the manifest (§8.4; §8.2; §5).",
+      "x-ctres-req": "O",
+      "type": "string",
+      "pattern": "^[A-Z]{2}(-[A-Z0-9]{1,8})*$"
+    },
+    "record_type": {
+      "description": "The record type the event carries (§4; §8.4), or checkpoint for the checkpoint of a gaming day (§8.4).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "R8",
+        "R9",
+        "R10",
+        "R11",
+        "R12",
+        "R13",
+        "R14",
+        "R15",
+        "checkpoint"
+      ]
+    },
+    "op": {
+      "description": "create, the first emission of a record identifier; update, the whole record re-sent, the latest sequence wins; void, the record is withdrawn, the record carrying at least its identifier and the envelope the reason (§8.4).",
+      "x-ctres-req": "M",
+      "type": "string",
+      "enum": [
+        "create",
+        "update",
+        "void"
+      ]
+    },
+    "record": {
+      "description": "The record, exactly as in a package, validated against the schema of its record_type (§4; Annex A), or, for record_type checkpoint, against checkpoint.schema.json (§8.4). With op void, an object that carries at least the record's identifier and is not otherwise validated.",
+      "x-ctres-req": "M",
+      "type": "object"
+    },
+    "reason": {
+      "description": "Why the record is withdrawn; used with op void (§8.4).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/text"
+    }
+  },
+  "required": [
+    "stream_id",
+    "sequence",
+    "emitted_at",
+    "licence_number",
+    "standard_version",
+    "record_type",
+    "op",
+    "record"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "op": {
+            "const": "void"
+          }
+        },
+        "required": [
+          "op"
+        ]
+      },
+      "then": {
+        "properties": {
+          "record": {
+            "minProperties": 1
+          }
+        }
+      },
+      "else": {
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R1"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r01_funds_location.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R2"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r02_payment_instrument_link.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R3"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r03_deposit.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R4"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r04_withdrawal.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R5"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r05_check_decision.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R6"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r06_internal_movement.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R7"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r07_reconciliation_statement.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R8"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r08_exception.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R9"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r09_incident.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R10"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r10_provider_register.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R11"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r11_provider_attestation.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R12"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r12_report_reference.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R13"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r13_gaming_revenue_statement.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R14"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r14_venue_count.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "R15"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "../records/r15_bet_event.schema.json"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "record_type": {
+                  "const": "checkpoint"
+                }
+              },
+              "required": [
+                "record_type"
+              ]
+            },
+            "then": {
+              "properties": {
+                "record": {
+                  "$ref": "checkpoint.schema.json"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "checkpoint"
+          }
+        },
+        "required": [
+          "record_type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "op": {
+            "const": "create"
+          }
+        }
+      }
+    }
+  ]
+}

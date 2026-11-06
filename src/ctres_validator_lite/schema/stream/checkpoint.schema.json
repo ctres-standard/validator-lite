@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctres.org/schema/1.1/stream/checkpoint.schema.json",
+  "title": "CTRES v1.1 stream checkpoint",
+  "description": "The checkpoint of a stream for a gaming day, or for an hour where the profile says so (§8.4): the range of sequences it covers and the chain hash of the event lines as transmitted. It is emitted as an event of the stream (record_type checkpoint, op create) at least once per gaming day per stream, and the period package lists the checkpoints of its period in the manifest under stream_checkpoints, so that the package can be reconciled with the stream (§8.2; §11). Integrity rests on the transport, the sequence numbers and this hash; no event is hashed or signed on its own.",
+  "type": "object",
+  "properties": {
+    "stream_id": {
+      "description": "Identifier of the stream the checkpoint covers, as in the event envelope (§8.4).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "licence_number": {
+      "description": "Licence the stream reports under, as in the manifest (§8.4; §8.2).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/identifier"
+    },
+    "period_start": {
+      "description": "Start of the gaming day or hour the checkpoint covers (§8.4; §5 Submission checkpoint).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "period_end": {
+      "description": "End of the gaming day or hour the checkpoint covers (§8.4).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "first_sequence": {
+      "description": "First sequence of the stream the checkpoint covers (§8.4).",
+      "x-ctres-req": "M",
+      "type": "integer",
+      "minimum": 1
+    },
+    "last_sequence": {
+      "description": "Last sequence of the stream the checkpoint covers; one below first_sequence where the period had no events (§8.4).",
+      "x-ctres-req": "M",
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_count": {
+      "description": "Number of sequences covered: last_sequence − first_sequence + 1, nothing deducted; a gap in the sequence is a finding, not a deduction (§8.4).",
+      "x-ctres-req": "M",
+      "type": "integer",
+      "minimum": 0
+    },
+    "chain_hash": {
+      "description": "SHA-256, as 64 lower-case hexadecimal characters, of the concatenation of the UTF-8 bytes of the event lines first_sequence to last_sequence as transmitted, each line followed by a line feed (U+000A), checkpoint events excluded (§8.4; §3 Deterministic and verifiable).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/sha256"
+    },
+    "generated_at": {
+      "description": "When the checkpoint was generated (§8.4).",
+      "x-ctres-req": "M",
+      "$ref": "../common.schema.json#/$defs/datetime"
+    },
+    "signature": {
+      "description": "Detached signature over the checkpoint made with the operator's certificate, where the profile requires one (§8.4; §8.2 signature_file).",
+      "x-ctres-req": "O",
+      "type": "string",
+      "minLength": 1
+    },
+    "previous_checkpoint_hash": {
+      "description": "The chain_hash of the previous checkpoint of the stream, so that the checkpoints form a chain (§8.4).",
+      "x-ctres-req": "O",
+      "$ref": "../common.schema.json#/$defs/sha256"
+    }
+  },
+  "required": [
+    "stream_id",
+    "licence_number",
+    "period_start",
+    "period_end",
+    "first_sequence",
+    "last_sequence",
+    "event_count",
+    "chain_hash",
+    "generated_at"
+  ],
+  "additionalProperties": false
+}

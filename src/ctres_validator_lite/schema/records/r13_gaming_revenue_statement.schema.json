@@ -11,12 +11,13 @@
       "$ref": "../common.schema.json#/$defs/identifier"
     },
     "statement_kind": {
-      "description": "Kind of statement: a period statement, or a correction that replaces an earlier statement after a re-settlement, a void after settlement or a jackpot revaluation (§4.13).",
+      "description": "Kind of statement: a period statement; a correction that replaces an earlier statement after a re-settlement, a void after settlement or a jackpot revaluation; or an interim statement, hourly or daily, emitted in a stream, which the period statement supersedes: interims are not corrected, they are re-emitted (§4.13; §8.4).",
       "x-ctres-req": "M",
       "type": "string",
       "enum": [
         "period",
-        "correction"
+        "correction",
+        "interim"
       ]
     },
     "licence_ref": {
@@ -374,7 +375,10 @@
       "if": {
         "properties": {
           "statement_kind": {
-            "const": "period"
+            "enum": [
+              "period",
+              "interim"
+            ]
           }
         },
         "required": [

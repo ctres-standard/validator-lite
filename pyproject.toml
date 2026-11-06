@@ -35,4 +35,4 @@ ctres-validate = "ctres_validator_lite.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ctres_validator_lite = ["schema/*.schema.json", "schema/records/*.schema.json"]
+ctres_validator_lite = ["schema/*.schema.json", "schema/records/*.schema.json", "schema/stream/*.schema.json"]

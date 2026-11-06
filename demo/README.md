@@ -1,8 +1,8 @@
 # Demonstration packages
 
-Four synthetic CTRES v1.1 packages for trying validator-lite. Their values are illustrative, like the examples in Annex C of the Standard. They describe a fictional operator, licence and profile in **XJ**, an ISO 3166-1 user-assigned code used here for a fictional jurisdiction. No value is drawn from any operator, player, provider or authority, and every manifest sets `"synthetic": true`.
+Four synthetic CTRES v1.1 packages for trying validator-lite, and the stream of one gaming day with its package. Their values are illustrative, like the examples in Annex C of the Standard. They describe a fictional operator, licence and profile in **XJ**, an ISO 3166-1 user-assigned code used here for a fictional jurisdiction. No value is drawn from any operator, player, provider or authority, and every manifest sets `"synthetic": true`.
 
-All four are generated from the same data by [`scripts/make_demo.py`](../scripts/make_demo.py), which reproduces them byte for byte:
+All are generated from the same data by [`scripts/make_demo.py`](../scripts/make_demo.py), which reproduces them byte for byte:
 
 ```sh
 python scripts/make_demo.py
@@ -14,6 +14,8 @@ python scripts/make_demo.py
 | [`demo/level1`](#demolevel1) | `level_1` Return | R13 | 3 | PASS, 1 advisory finding |
 | [`demo/level2`](#demolevel2) | `level_2` Evidence | R3, R4, R7, R13, R14 | 26 | PASS, 10 advisory findings |
 | [`demo/defects`](#demodefects) | `level_4` Supervision | R1 to R14, with ten defects | 76 | FAIL, 9 blocking and 1 advisory |
+| [`demo/stream/events.ndjson`](#demostream) | — (a stream, §8.4) | R3, R4, R5, R13, R15 events and a checkpoint | 26 events | `--stream`: PASS, no findings |
+| [`demo/stream/package`](#demostream) | `level_2` Evidence | R3, R4, R7, R13, R15 | 22 | `--reconcile`: PASS, 7 advisory findings |
 
 The clean package as release 1.0.1 wrote it, a CTRES v1.0 package without R13 and R14, is kept unchanged under [`tests/fixtures/clean_1_0`](../tests/fixtures/clean_1_0); the tests show that it still passes. Its manifest declares `level_2` in the v1.0 meaning of the field, a delivery level, so STR-09 is not run on it.
 
@@ -114,3 +116,40 @@ Result: FAIL: 9 blocking findings, 1 advisory; declared level_4 (Supervision).
 ```
 
 The package fingerprint of `demo/defects`, the SHA-256 of its `manifest.json`, is `93dd351cd6eeacef326512eef6e3331c10917d0e9a7e696b7118d01d65e62fe1`.
+
+## demo/stream
+
+The stream (§8.4) of one gaming day, **14 November 2026**, for the same operator, licence and profile, and the package of that day. The stream is one for every record type, `XJ/DEMO/0001:all`, sequences 1 to 26. The day's payments are new rows for the month's players, instruments and rails (deposits D-2026-11-0021 to 0024, withdrawals W-2026-11-0021 and 0022, checks C-2026-11-1001 to 1006), so that no identifier is shared with the monthly packages; the day's bets are seven (R15), and the day's revenue lines (R13) aggregate them. Each event is emitted shortly after its anchor timestamp: a check one second after `performed_at`, a payment two seconds after `credited_at` or `paid_at`, a bet two seconds after `placed_at` or `settled_at`, the interim statement 31 seconds after its cut-off, the period statements 20 seconds after the day's; `--max-latency PT60S` passes.
+
+| Sequence | Event | Content |
+|---|---|---|
+| 1 to 23 | R5, R3, R4 and R15 events, in the order they occur | Six R5 checks, each a second before its payment; four R3 deposits (card, bank transfer, mobile money, virtual asset on chain) and two R4 withdrawals (card, bank transfer); ten R15 events for seven bets: a sports bet placed open (3) and updated to `settled` (13), a slot round created `settled` (4), a sports bet placed open (7) and updated to `void` (12), two more slot rounds created settled (11, 15), a sports bet placed open (21) and updated to `cashed_out` (23), and a sports bet placed open (22) that is still open at the cut-off. |
+| 8 | R13 `interim` | The sports line at noon, `statement_kind` `interim`: the two bets placed so far, stakes 120.00, nothing settled, superseded by the period statement. |
+| 24, 25 | R13 `period` | The day's two period statements, at the cut-off: casino slots, `all_in`, (17.00 + 5.00 − 0.00) − (11.50 + 0.00) = 10.50; sports, `cash_only`, 165.00 − 100.00 (the void) − 60.00 = 5.00, with the open bet of 15.00 as `open_liability_end`. Both self-assess a levy at 20%. |
+| 26 | checkpoint | `first_sequence` 1, `last_sequence` 25, `event_count` 25, `chain_hash` the SHA-256 of lines 1 to 25 each followed by a line feed, generated 31 seconds after the cut-off. |
+
+`demo/stream/package` is the `level_2` package of the same day, identifier `PKG-XJ-DEMO-0001-2026-11-14-STREAM`, period 2026-11-14T00:00:00+01:00 to 2026-11-14T23:59:59+01:00: `R3_deposits.jsonl` (4), `R4_withdrawals.jsonl` (2), `R7_reconciliation_statements.jsonl` (the day's coverage statement, with the open bet among the liabilities), `R13_gaming_revenue_statements.jsonl` (the two period statements) and `R15_bet_events.jsonl` (the final state of each of the seven bets: four `settled`, one `void`, one `cashed_out`, one `open`), with the checkpoint listed in the manifest's `stream_checkpoints`. No R13 line has `channel` `venue`, so R14 is not required.
+
+`ctres-validate --stream demo/stream/events.ndjson` reports no findings (STM-07 is not run without `--max-latency`) and exits with status 0:
+
+```text
+Result: PASS: no blocking findings, 0 advisory; 26 events in 1 stream (XJ/DEMO/0001:all, sequences 1 to 26), 1 checkpoint.
+```
+
+`ctres-validate demo/stream/package --reconcile demo/stream/events.ndjson` applies the package checks, the stream checks and REC-01 to REC-04. The package passes with seven advisory findings, all of the kinds the level packages show: the references the level does not resolve, and the R5 checks the stream carries and the package, which the level does not require to carry R5, does not.
+
+| Check | Expected findings (all advisory) |
+|---|---|
+| REF-01 | `location_id — not resolved: R1 is not required at level_2 and is not in the package` |
+| REF-02 | `check_ids — not resolved: R5 is not required at level_2 and is not in the package` |
+| REF-03 | `instrument_id — not resolved: R2 is not required at level_2 and is not in the package`; `source_instrument_ids — not resolved: R2 is not required at level_2 and is not in the package` |
+| REF-05 | `provider_id — not resolved: R10 is not required at level_2 and is not in the package` |
+| REF-08 | `attestation_ref — not resolved: R11 is not required at level_2 and is not in the package` |
+| REC-01 | `R5 records — not reconciled: R5 is not required at level_2 and is not in the package`; and a note: `1 R13 interim statement is superseded by the period statement and not expected in the package` |
+| REC-02 | no finding; a note: `R7 is not streamed: its records are not reconciled` |
+
+```text
+Result: PASS: no blocking findings, 7 advisory; declared level_2 (Evidence); reconciled with demo/stream/events.ndjson (26 events, 1 checkpoint).
+```
+
+Had a bet been left out of the package, REC-01 would report `sequence 22 (B-2026-11-14-0007): the final state of this R15 record is not in the package`; had its winnings differed, REC-03 would report `B-2026-11-14-0001: differs from the final streamed state (sequence 13): winnings 37.00 in the package, 36.00 in the stream`; had the manifest's checkpoint carried another hash, REC-04 would report it field by field. The test suite exercises each (`tests/test_validator.py`).

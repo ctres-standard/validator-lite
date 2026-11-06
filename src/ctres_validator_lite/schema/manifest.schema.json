@@ -11,7 +11,7 @@
       "const": "CTRES"
     },
     "standard_version": {
-      "description": "Version of the Standard and of this schema family the package conforms to (§13 Versioning). A package that lists an R13 or R14 file declares 1.1; a package without them may declare 1.0 and remains valid.",
+      "description": "Version of the Standard and of this schema family the package conforms to (§13 Versioning). A package that lists an R13, R14 or R15 file declares 1.1; a package without them may declare 1.0 and remains valid.",
       "x-ctres-req": "M",
       "type": "string",
       "enum": [
@@ -125,7 +125,8 @@
               "R11",
               "R12",
               "R13",
-              "R14"
+              "R14",
+              "R15"
             ]
           },
           "record_count": {
@@ -285,6 +286,16 @@
         "additionalProperties": false
       }
     },
+    "stream_checkpoints": {
+      "description": "The checkpoints of the streams that carried the period's records, one per stream and gaming day (or hour), each as emitted in its stream (§8.4), so that the package can be reconciled with the stream (§11). submission_mode is then periodic_package or continuous; this schema does not enforce it.",
+      "x-ctres-req": "C",
+      "x-ctres-condition": "Where the profile's submission mode is continuous or both and the records of the period were streamed (§8.4; §5 Submission mode).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "stream/checkpoint.schema.json"
+      }
+    },
     "synthetic": {
       "description": "True where the package contains synthetic data for demonstration or testing and describes no real operator (§3). Defaults to false.",
       "x-ctres-req": "O",
@@ -346,7 +357,8 @@
                 "record_type": {
                   "enum": [
                     "R13",
-                    "R14"
+                    "R14",
+                    "R15"
                   ]
                 }
               },

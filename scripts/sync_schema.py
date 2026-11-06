@@ -9,7 +9,11 @@ in SCHEMA_VERSION (src/ctres_validator_lite/__init__.py).
 Usage:  python scripts/sync_schema.py [SOURCE] [--version X.Y.Z]
 
 SOURCE is the root of a ctres-standard/schema checkout (default: ../schema). The version defaults
-to the latest release heading ("## X.Y.Z") in SOURCE/CHANGELOG.md. Files are copied byte for byte.
+to the latest release heading ("## X.Y.Z") in SOURCE/CHANGELOG.md. Files are copied byte for byte:
+every *.schema.json under schema/, which is the common, manifest, profile, payment and rail-module
+schemas, schema/records/ (one per record type) and schema/stream/ (the event envelope and the
+checkpoint, §8.4). The reference transport, schema/stream/openapi.yaml, is documentation and is
+not copied.
 """
 import argparse
 import json
@@ -21,6 +25,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / "src" / "ctres_validator_lite" / "schema"
 INIT = ROOT / "src" / "ctres_validator_lite" / "__init__.py"
+
+# Files the validator needs beyond the record schemas; a release that lacks one is not copied.
+REQUIRED = ("manifest.schema.json", "common.schema.json", "stream/event.schema.json", "stream/checkpoint.schema.json")
 
 
 def main(argv=None):
@@ -44,19 +51,23 @@ def main(argv=None):
 
     # Every $id must lie under the MAJOR.MINOR path of the release, and match the file's own path.
     base = "https://ctres.org/schema/" + ".".join(version.split(".")[:2]) + "/"
-    files = sorted(source.rglob("*.schema.json"))
+    files = sorted(source.rglob("*.schema.json"))     # schema/, schema/records/ and schema/stream/
+    if missing := [f for f in REQUIRED if not (source / f).is_file()]:
+        sys.exit(f"sync_schema: {source} lacks {', '.join(missing)}")
     for path in files:
         rel = path.relative_to(source).as_posix()
         if json.loads(path.read_text(encoding="utf-8")).get("$id") != base + rel:
             sys.exit(f"sync_schema: {rel}: $id is not {base + rel}")
 
-    # Replace the vendored copy.
+    # Replace the vendored copy: the schema files only, never openapi.yaml or anything else.
     for old in TARGET.rglob("*.schema.json"):
         old.unlink()
     for path in files:
         dest = TARGET / path.relative_to(source)
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, dest)
+    if stray := sorted(p.relative_to(TARGET).as_posix() for p in TARGET.rglob("*") if p.is_file() and not p.name.endswith(".schema.json")):
+        sys.exit(f"sync_schema: files that are not schemas under {TARGET.relative_to(ROOT)}: {', '.join(stray)}")
 
     text = INIT.read_text(encoding="utf-8")
     text, n = re.subn(r'^SCHEMA_VERSION = "[^"]*"$', f'SCHEMA_VERSION = "{version}"', text, flags=re.M)

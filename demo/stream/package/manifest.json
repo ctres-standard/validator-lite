@@ -1,0 +1,64 @@
+{
+  "standard": "CTRES",
+  "standard_version": "1.1",
+  "package_id": "PKG-XJ-DEMO-0001-2026-11-14-STREAM",
+  "licence_number": "XJ/DEMO/0001",
+  "licensing_authority": "Example Gambling Authority (fictional)",
+  "licensee": "Example Operator Ltd (SYNTHETIC)",
+  "profile_id": "XJ-EXAMPLE",
+  "profile_version": "1.1.0",
+  "period_start": "2026-11-14T00:00:00+01:00",
+  "period_end": "2026-11-14T23:59:59+01:00",
+  "submission_mode": "periodic_package",
+  "reporting_currency": "EUR",
+  "conformance_level_declared": "level_2",
+  "records_start_date": "2026-01-05",
+  "files": [
+    {
+      "file": "R3_deposits.jsonl",
+      "record_type": "R3",
+      "record_count": 4,
+      "sha256": "7f5e192a7898032fb9100436dd693f0f90609bf19cbf4b7db01e5347102f86ac"
+    },
+    {
+      "file": "R4_withdrawals.jsonl",
+      "record_type": "R4",
+      "record_count": 2,
+      "sha256": "cc863f36e390cecb7b5704e17a147136299a3e019b5755f4c9fe03471fe78cf6"
+    },
+    {
+      "file": "R7_reconciliation_statements.jsonl",
+      "record_type": "R7",
+      "record_count": 1,
+      "sha256": "809720fcb9aba77725d64fff5628d582147d7fc7bfa7d71d6af1a40509bfbbb1"
+    },
+    {
+      "file": "R13_gaming_revenue_statements.jsonl",
+      "record_type": "R13",
+      "record_count": 2,
+      "sha256": "57f1c19a874f05a24f2e1f7b78b421df313e241865b035277b69b9246bb87093"
+    },
+    {
+      "file": "R15_bet_events.jsonl",
+      "record_type": "R15",
+      "record_count": 7,
+      "sha256": "26169f29f4834a8202078e01ff31073d5a1abca71866e78eeae503a0be571676"
+    }
+  ],
+  "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
+  "generating_software_version": "1.1.0",
+  "stream_checkpoints": [
+    {
+      "stream_id": "XJ/DEMO/0001:all",
+      "licence_number": "XJ/DEMO/0001",
+      "period_start": "2026-11-14T00:00:00+01:00",
+      "period_end": "2026-11-14T23:59:59+01:00",
+      "first_sequence": 1,
+      "last_sequence": 25,
+      "event_count": 25,
+      "chain_hash": "5848c7a9a84ae64780b3b7d429c9d5ebb1053c24724e9348a8a9571aff60b550",
+      "generated_at": "2026-11-15T00:00:30+01:00"
+    }
+  ],
+  "synthetic": true
+}

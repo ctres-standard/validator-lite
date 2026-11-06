@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Write the synthetic demonstration packages demo/clean, demo/level1, demo/level2 and demo/defects.
+"""Write the synthetic demonstration packages demo/clean, demo/level1, demo/level2 and demo/defects, and the
+stream of one gaming day, demo/stream/events.ndjson, with its package demo/stream/package.
 
 Usage:  python scripts/make_demo.py [OUT_DIR]        (default: demo/)
 
-All four packages describe a fictional operator, licence and profile in the fictional jurisdiction
-XJ (an ISO 3166-1 user-assigned code), from the same synthetic data. Every value is invented.
-demo/clean is a CTRES v1.1 package with every record type (standard_version 1.1, R13 gaming revenue
-statements and R14 venue counts included) that declares level_4 and passes every check of
-validator-lite. demo/level1 (manifest + R13, level_1) and demo/level2 (manifest + R3, R4, R7, R13
-and R14, level_2) are the same data cut down to the record types their level requires (LEVEL_PACKAGES);
-both pass. demo/defects is the clean package with the deliberate defects listed in DEFECTS (and in
-demo/README.md). The output is byte-for-byte reproducible. The 1.0 package that earlier releases of
-this script wrote is kept unchanged under tests/fixtures/clean_1_0.
+Everything describes a fictional operator, licence and profile in the fictional jurisdiction XJ (an
+ISO 3166-1 user-assigned code), from the same synthetic data. Every value is invented. demo/clean is
+a CTRES v1.1 package with record types R1 to R14 (standard_version 1.1, R13 gaming revenue statements
+and R14 venue counts included) that declares level_4 and passes every check of validator-lite.
+demo/level1 (manifest + R13, level_1) and demo/level2 (manifest + R3, R4, R7, R13 and R14, level_2)
+are the same data cut down to the record types their level requires (LEVEL_PACKAGES); both pass.
+demo/defects is the clean package with the deliberate defects listed in DEFECTS (and in demo/README.md).
+demo/stream/events.ndjson is the stream (§8.4) of the gaming day 14 November 2026 for the same operator:
+the R5 checks, R3 deposits, R4 withdrawals and R15 bet events of the day as they occur, an R13 interim
+statement at noon, the day's R13 period statements at the cut-off, and the checkpoint of the day;
+demo/stream/package is the level_2 package of that day (R3, R4, R7, R13, R15, with the checkpoint in the
+manifest's stream_checkpoints), so that the stream passes --stream and the package passes --reconcile
+against it. The output is byte-for-byte reproducible. The 1.0 package that earlier releases of this
+script wrote is kept unchanged under tests/fixtures/clean_1_0.
 """
 import copy
 import hashlib
@@ -26,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PERIOD_START, PERIOD_END = "2026-11-01T00:00:00+01:00", "2026-11-30T23:59:59+01:00"
 OPERATOR = "Example Operator Ltd (SYNTHETIC)"
 AUTHORITY = "Example Gambling Authority (fictional)"
+LICENCE, PROFILE = "XJ/DEMO/0001", "XJ-EXAMPLE"
 SCOPE = "demo-brand"                      # player_ref_scope
 CET, UTC = timezone(timedelta(hours=1)), timezone.utc
 USDT_EUR = D("0.92")                      # reporting-currency rate for USDT-ERC20, and the account rate
@@ -39,7 +46,7 @@ FILES = {"R1": "R1_funds_locations.jsonl", "R2": "R2_payment_instrument_links.js
          "R6": "R6_internal_movements.jsonl", "R7": "R7_reconciliation_statements.jsonl",
          "R8": "R8_exceptions.jsonl", "R9": "R9_incidents.jsonl", "R10": "R10_provider_register.jsonl",
          "R11": "R11_provider_attestations.jsonl", "R12": "R12_report_references.jsonl",
-         "R13": "R13_gaming_revenue_statements.jsonl", "R14": "R14_venue_counts.jsonl"}
+         "R13": "R13_gaming_revenue_statements.jsonl", "R14": "R14_venue_counts.jsonl", "R15": "R15_bet_events.jsonl"}
 
 # The core fields of an R13 statement, first in every statement (§4.13); the conditional and optional fields follow.
 R13_CORE = ("statement_id", "statement_kind", "licence_ref", "product_line", "channel", "period_start", "period_end",
@@ -190,11 +197,13 @@ def instruments():
 
 # ------------------------------------------------------------------ payments and checks: R3, R4, R5
 
-def payments():
+def payments(deposit_rows=DEPOSITS, withdrawal_rows=WITHDRAWALS, check_start=0):
+    """R3, R4 and R5 for the rows given: the month's (the default) or the stream day's, whose check
+    identifiers continue from check_start so that the two sets never share one."""
     deposits, withdrawals, checks = [], [], []
 
     def check(subject_type, subject_ref, ctype, register, party, result, at, decision="allow", by="automated", **extra):
-        cid = f"C-2026-11-{len(checks) + 1:04d}"
+        cid = f"C-2026-11-{check_start + len(checks) + 1:04d}"
         rec = {"check_id": cid, "subject_type": subject_type, "subject_ref": subject_ref}
         if subject_type == "player":
             rec["subject_ref_scope"] = SCOPE
@@ -275,9 +284,9 @@ def payments():
             rec.update({"destination_rule": "same_instrument", "source_instrument_ids": [instrument]})
         return rec
 
-    for row in DEPOSITS:
+    for row in deposit_rows:
         deposits.append(payment("deposit", *row))
-    for row in WITHDRAWALS:
+    for row in withdrawal_rows:
         withdrawals.append(payment("withdrawal", *row))
     return deposits, withdrawals, checks
 
@@ -467,8 +476,9 @@ def apply_defects(recs):
 
 # ------------------------------------------------------------------ writing
 
-def write(out, recs, package_id, level, tamper=None):
-    """Write one file per record type in recs, in R1 to R14 order, sealed in a manifest that declares level."""
+def write(out, recs, package_id, level, tamper=None, period=(PERIOD_START, PERIOD_END), stream_checkpoints=None):
+    """Write one file per record type in recs, in R1 to R15 order, sealed in a manifest that declares level and
+    covers period; with stream_checkpoints, the manifest lists them (§8.4)."""
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
@@ -480,12 +490,13 @@ def write(out, recs, package_id, level, tamper=None):
         (out / name).write_text(text, encoding="utf-8")
         entries.append({"file": name, "record_type": rtype, "record_count": len(recs[rtype]), "sha256": sha(text)})
     manifest = {"standard": "CTRES", "standard_version": "1.1", "package_id": package_id,
-                "licence_number": "XJ/DEMO/0001", "licensing_authority": AUTHORITY, "licensee": OPERATOR,
-                "profile_id": "XJ-EXAMPLE", "profile_version": "1.1.0", "period_start": PERIOD_START,
-                "period_end": PERIOD_END, "submission_mode": "periodic_package", "reporting_currency": "EUR",
+                "licence_number": LICENCE, "licensing_authority": AUTHORITY, "licensee": OPERATOR,
+                "profile_id": PROFILE, "profile_version": "1.1.0", "period_start": period[0],
+                "period_end": period[1], "submission_mode": "periodic_package", "reporting_currency": "EUR",
                 "conformance_level_declared": level, "records_start_date": "2026-01-05", "files": entries,
                 "generating_software": "ctres-validator-lite demonstration generator (scripts/make_demo.py)",
-                "generating_software_version": "1.1.0", "synthetic": True}
+                "generating_software_version": "1.1.0",
+                **({"stream_checkpoints": stream_checkpoints} if stream_checkpoints else {}), "synthetic": True}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if tamper:                                     # STR-02: a file altered after the manifest was sealed
         name, old, new = tamper
@@ -493,6 +504,207 @@ def write(out, recs, package_id, level, tamper=None):
         text = path.read_text(encoding="utf-8")
         assert text.count(old) == 1, old
         path.write_text(text.replace(old, new), encoding="utf-8")
+
+
+# ------------------------------------------------------------------ the stream of one gaming day (§8.4)
+
+DAY = 14                                                                      # 14 November 2026, the day R14 counts
+DAY_START, DAY_END = f"2026-11-{DAY}T00:00:00+01:00", f"2026-11-{DAY}T23:59:59+01:00"
+STREAM_ID = f"{LICENCE}:all"                                                  # one stream for every record type
+SPORTS_DAY = f"GRS-2026-11-{DAY}-XJ-DEMO-0001-SPORTS-ONLINE-EUR"
+CASINO_DAY = f"GRS-2026-11-{DAY}-XJ-DEMO-0001-CASINO-ONLINE-EUR"
+INTERIM_CUT = (12, 0, 0)                                                      # the interim statement at noon
+
+# The day's payments: the same players, instruments and rails as the month's; identifiers from 21 so that the
+# two sets never share one. n, rail, player, instrument, day, hour, minute, amount, on chain.
+STREAM_DEPOSITS = [
+    (21, "card", "P-1001", "I-CARD-1001", DAY, 9, 12, "50.00", None),
+    (22, "bank_transfer", "P-1004", "I-BANK-1004", DAY, 11, 40, "300.00", None),
+    (23, "mobile_money", "P-1005", "I-MM-1005", DAY, 13, 5, "20.00", None),
+    (24, "virtual_asset", "P-1007", "I-VA-1007", DAY, 16, 20, "100.000000", True),
+]
+STREAM_WITHDRAWALS = [
+    (21, "card", "P-1001", "I-CARD-1001", DAY, 18, 30, "80.00", None),
+    (22, "bank_transfer", "P-1004", "I-BANK-1004", DAY, 20, 15, "250.00", None),
+]
+
+# The day's bets (R15): n, player, product line, cash stake, placed at (h, m, s), outcome as (status, settled at,
+# cash winnings) or None while the bet is still open at the cut-off, and the other fields of the bet. A slot
+# round settles within seconds and is emitted once, settled; a sports bet is emitted open and updated when it
+# settles, is voided or is cashed out.
+BETS = [
+    (1, "P-1001", "SPORTS-PREMATCH-LIVE", "20.00", (9, 30, 12), ("settled", (15, 45, 8), "36.00"),
+     {"game_ref": "EVT-20261114-0007:match_winner", "odds": "1.80"}),
+    (2, "P-1003", "CASINO-SLOTS", "5.00", (10, 2, 41), ("settled", (10, 2, 44), "0.00"),
+     {"stake_bonus": "5.00", "winnings_bonus": "0.00", "game_ref": "GAME-SLOT-0113"}),
+    (3, "P-1004", "SPORTS-PREMATCH-LIVE", "100.00", (11, 50, 3), ("void", (14, 0, 0), None),
+     {"void_reason": "Event cancelled; stake returned", "game_ref": "EVT-20261114-0012:match_winner", "odds": "2.05"}),
+    (4, "P-1005", "CASINO-SLOTS", "2.00", (13, 10, 0), ("settled", (13, 10, 3), "7.50"), {"game_ref": "GAME-SLOT-0088"}),
+    (5, "P-1006", "CASINO-SLOTS", "10.00", (17, 22, 10), ("settled", (17, 22, 13), "4.00"), {"game_ref": "GAME-SLOT-0113"}),
+    (6, "P-1007", "SPORTS-PREMATCH-LIVE", "30.00", (20, 30, 50), ("cashed_out", (22, 10, 15), "24.00"),
+     {"game_ref": "EVT-20261114-0021:match_winner", "odds": "2.10"}),
+    (7, "P-1003", "SPORTS-PREMATCH-LIVE", "15.00", (21, 0, 5), None,
+     {"game_ref": "EVT-20261115-0003:match_winner", "odds": "3.25"}),
+]
+
+
+def day_time(hms):
+    return datetime(2026, 11, DAY, *hms, tzinfo=CET)
+
+
+def bet_record(n, player, line, stake, placed, outcome, extra, as_of=None):
+    """The R15 record of a bet as of a moment (its final state where as_of is None), fields in the order of
+    §4.15: the core first."""
+    bet_id = f"B-2026-11-{DAY}-{n:04d}"
+    settled = outcome is not None and (as_of is None or day_time(outcome[1]) <= as_of)
+    rec = {"bet_id": bet_id, "player_ref": player, "player_ref_scope": SCOPE, "product_line": line, "channel": "online",
+           "currency": "EUR", "stake": stake, "placed_at": ts(day_time(placed)),
+           "status": outcome[0] if settled else "open"}
+    ledger = [f"LE-{bet_id}-S"]                                               # the stake debit
+    if "stake_bonus" in extra:
+        rec["stake_bonus"] = extra["stake_bonus"]
+    if settled:
+        status, at, winnings = outcome
+        if winnings is not None:
+            rec["winnings"] = winnings
+            if "winnings_bonus" in extra:
+                rec["winnings_bonus"] = extra["winnings_bonus"]
+        rec["settled_at"] = ts(day_time(at))
+        if status == "void":
+            rec["void_reason"] = extra["void_reason"]
+            ledger.append(f"LE-{bet_id}-R")                                   # the stake returned
+        elif D(winnings) > 0:
+            ledger.append(f"LE-{bet_id}-W")                                   # the winnings credit
+    rec["jurisdiction_category"] = "betting" if line.startswith("SPORTS") else "casino_games"
+    rec["game_ref"] = extra["game_ref"]
+    if "odds" in extra:
+        rec["odds"] = extra["odds"]
+    rec.update({"ledger_entry_refs": ledger, "evidence_ref": f"BET-LOG-2026-11-{DAY}"})
+    return rec
+
+
+def bets():
+    """The final state of every bet of the day, in bet order (the package), and the bet events of the stream as
+    (anchor time, op, record): one create per bet, at placement with the open state or, for a round settled
+    within seconds, at settlement with the final state; one update per later settlement, void or cash-out."""
+    final, events = [], []
+    for n, player, line, stake, placed, outcome, extra in BETS:
+        final.append(bet_record(n, player, line, stake, placed, outcome, extra))
+        placed_at = day_time(placed)
+        if outcome and day_time(outcome[1]) - placed_at <= timedelta(seconds=10):
+            events.append((day_time(outcome[1]), "create", final[-1]))
+            continue
+        events.append((placed_at, "create", bet_record(n, player, line, stake, placed, outcome, extra, as_of=placed_at)))
+        if outcome:
+            events.append((day_time(outcome[1]), "update", final[-1]))
+    return final, events
+
+
+def day_line(statement_id, kind, line, basis, formula, cut, evidence, levy):
+    """An R13 line of the day for a product line, aggregated from the bets as of the cut-off under the profile's
+    recognition (stakes when placed, winnings when settled): the core fields of §4.13 first."""
+    as_of = day_time(cut)
+    rows = [bet_record(*b, as_of=as_of) for b in BETS if b[2] == line and day_time(b[4]) <= as_of]
+    total = lambda key, rows=rows: sum((D(r.get(key, "0")) for r in rows), D(0))      # noqa: E731
+    stakes, bonus = total("stake"), total("stake_bonus")
+    refunded = sum((D(r["stake"]) for r in rows if r["status"] == "void"), D(0))
+    winnings, winnings_bonus = total("winnings"), total("winnings_bonus")
+    ggr = (stakes + bonus - refunded) - (winnings + winnings_bonus) if formula == "all_in" else stakes - refunded - winnings
+    rec = {"statement_id": statement_id, "statement_kind": kind, "licence_ref": LICENCE, "product_line": line,
+           "channel": "online", "period_start": DAY_START, "period_end": ts(as_of - timedelta(seconds=1)) if kind == "interim" else DAY_END,
+           "currency": "EUR", "stakes_basis": "placed", "winnings_basis": basis, "stakes_cash": q(stakes),
+           "stakes_refunded": q(refunded), "winnings_cash": q(winnings), "ggr_declared": q(ggr), "ggr_formula": formula,
+           "prepared_by": "finance_ops" if kind == "period" else "platform_interim_job",
+           "reviewed_by": "compliance_officer" if kind == "period" else "not_recorded",
+           "evidence_ref": evidence, "jurisdiction_category": "betting" if line.startswith("SPORTS") else "casino_games"}
+    if any("stake_bonus" in r for r in rows):
+        rec.update({"stakes_bonus": q(bonus), "winnings_bonus": q(winnings_bonus), "bonus_granted": q(bonus),
+                    "bonus_expired": "0.00", "bonus_measurement": "per_round"})
+    if line.startswith("SPORTS"):
+        rec.update({"open_liability_start": "0.00",
+                    "open_liability_end": q(sum((D(r["stake"]) for r in rows if r["status"] == "open"), D(0))),
+                    "bets_count": len(rows)})
+    else:
+        rec["rounds_count"] = len(rows)
+    rec["active_players"] = len({r["player_ref"] for r in rows})
+    if levy:
+        rec.update({"levy_base_declared": q(ggr), "levy_rate": "0.20", "levy_amount_declared": q(ggr * D("0.20"))})
+    return rec
+
+
+def day_statements():
+    """The interim statement at noon (the sports line so far, superseded at the cut-off) and the two period
+    statements of the day, which the package carries."""
+    interim = day_line(f"{SPORTS_DAY}-INTERIM-1200", "interim", "SPORTS-PREMATCH-LIVE", "paid", "cash_only", INTERIM_CUT,
+                       f"RPT-PLATFORM-GGR-2026-11-{DAY}-SPORTS-1200", levy=False)
+    period = [day_line(SPORTS_DAY, "period", "SPORTS-PREMATCH-LIVE", "paid", "cash_only", (23, 59, 59),
+                       f"RPT-PLATFORM-GGR-2026-11-{DAY}-SPORTS", levy=True),
+              day_line(CASINO_DAY, "period", "CASINO-SLOTS", "credited", "all_in", (23, 59, 59),
+                       f"RPT-PLATFORM-GGR-2026-11-{DAY}-CASINO", levy=True)]
+    return interim, period
+
+
+def day_coverage(final):
+    """The day's coverage statement (R7), the open bets at the cut-off among the liabilities."""
+    open_bets = sum((D(r["stake"]) for r in final if r["status"] == "open"), D(0))
+    balances = D("61480.90")
+    return {"statement_id": f"COV-2026-11-{DAY}-XJ-DEMO-0001", "kind": "coverage", "period_start": DAY_START,
+            "period_end": DAY_END, "currency_or_asset": "EUR", "player_balances_total": q(balances),
+            "pending_withdrawals_total": "0.00", "open_bets_total": q(open_bets),
+            "player_liability_total": q(balances + open_bets), "funds_held": {"segregated_account": "64980.00"},
+            "in_transit_total": "92.00", "shortfall": "0.00", "prepared_by": "finance_ops", "reviewed_by": "compliance_officer"}
+
+
+def parse_ts(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def stream_events(deps, wds, checks, bet_events, interim, period):
+    """The events of the day in emission order, one line each, and the checkpoint that seals them. An event is
+    emitted shortly after its anchor: a check one second after performed_at, a payment two seconds after
+    credited_at or paid_at, a bet two seconds after placed_at or settled_at, the interim statement 31 seconds
+    after its cut-off, the period statements 20 seconds after the day's, all within a latency of PT60S."""
+    items = []
+    for c in checks:
+        items.append((parse_ts(c["performed_at"]) + timedelta(seconds=1), 0, "R5", "create", c))
+    for d in deps:
+        items.append((parse_ts(d["credited_at"]) + timedelta(seconds=2), 1, "R3", "create", d))
+    for w in wds:
+        items.append((parse_ts(w["paid_at"]) + timedelta(seconds=2), 1, "R4", "create", w))
+    for anchor, op, rec in bet_events:
+        items.append((anchor + timedelta(seconds=2), 2, "R15", op, rec))
+    items.append((parse_ts(interim["period_end"]) + timedelta(seconds=31), 3, "R13", "create", interim))
+    for line in period:
+        items.append((parse_ts(line["period_end"]) + timedelta(seconds=20), 3, "R13", "create", line))
+    items.sort(key=lambda i: (i[0], i[1], json.dumps(i[4], sort_keys=True)))
+    lines = []
+    for n, (emitted, _, rtype, op, rec) in enumerate(items, 1):
+        event = {"stream_id": STREAM_ID, "sequence": n, "emitted_at": ts(emitted), "licence_number": LICENCE,
+                 "standard_version": "1.1", "profile_id": PROFILE, "record_type": rtype, "op": op, "record": rec}
+        lines.append(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+    checkpoint = {"stream_id": STREAM_ID, "licence_number": LICENCE, "period_start": DAY_START, "period_end": DAY_END,
+                  "first_sequence": 1, "last_sequence": len(lines), "event_count": len(lines),
+                  "chain_hash": sha("".join(line + "\n" for line in lines)),
+                  "generated_at": ts(parse_ts(DAY_END) + timedelta(seconds=31))}
+    event = {"stream_id": STREAM_ID, "sequence": len(lines) + 1, "emitted_at": checkpoint["generated_at"],
+             "licence_number": LICENCE, "standard_version": "1.1", "profile_id": PROFILE, "record_type": "checkpoint",
+             "op": "create", "record": checkpoint}
+    lines.append(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+    return lines, checkpoint
+
+
+def write_stream(out):
+    """demo/stream: events.ndjson, the stream of the day, and package/, the level_2 package of the same day."""
+    deps, wds, checks = payments(STREAM_DEPOSITS, STREAM_WITHDRAWALS, check_start=1000)
+    final, bet_events = bets()
+    interim, period = day_statements()
+    lines, checkpoint = stream_events(deps, wds, checks, bet_events, interim, period)
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    (out / "events.ndjson").write_text("".join(line + "\n" for line in lines), encoding="utf-8")
+    write(out / "package", {"R3": deps, "R4": wds, "R7": [day_coverage(final)], "R13": period, "R15": final},
+          f"PKG-XJ-DEMO-0001-2026-11-{DAY}-STREAM", "level_2", period=(DAY_START, DAY_END), stream_checkpoints=[checkpoint])
 
 
 def build(out_dir):
@@ -505,9 +717,10 @@ def build(out_dir):
     apply_defects(defective)
     write(out_dir / "defects", defective, "PKG-XJ-DEMO-0001-2026-11-DEFECTS", "level_4",
           tamper=("R6_internal_movements.jsonl", '"amount":"350.00"', '"amount":"3500.00"'))
+    write_stream(out_dir / "stream")
 
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "demo"
     build(target)
-    print(f"wrote {target / 'clean'}, {target / 'level1'}, {target / 'level2'} and {target / 'defects'}")
+    print(f"wrote {target / 'clean'}, {target / 'level1'}, {target / 'level2'}, {target / 'defects'} and {target / 'stream'}")

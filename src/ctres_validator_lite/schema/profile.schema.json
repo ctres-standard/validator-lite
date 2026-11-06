@@ -869,7 +869,7 @@
           "unevaluatedProperties": false
         },
         "submission": {
-          "description": "Submission mode and cadence (§5; §8.1).",
+          "description": "Submission mode and cadence, and the stream parameters of §8.4 (§5; §8.1).",
           "x-ctres-req": "C",
           "x-ctres-condition": "Mandatory in a profile that does not inherit from a base profile; in an inheriting profile only the blocks that override the base are present (§5).",
           "allOf": [
@@ -940,7 +940,8 @@
                         "R11",
                         "R12",
                         "R13",
-                        "R14"
+                        "R14",
+                        "R15"
                       ]
                     }
                   },
@@ -1024,6 +1025,70 @@
                 "level_2",
                 "level_3",
                 "level_4"
+              ]
+            },
+            "mode": {
+              "description": "How the records reach the authority (§8.4; §5 Submission): periodic, the period package alone; continuous, a stream with a checkpoint per gaming day and a package on request; both, the stream and the period package, which remains the signed close of the period.",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "periodic",
+                "continuous",
+                "both"
+              ]
+            },
+            "latency": {
+              "description": "Maximum delay between a record's anchor timestamp and the emission of its event, per record type, as ISO 8601 durations, for example {\"R3\": \"PT60S\", \"R13\": \"P1D\"} (§8.4; §5 Submission). Anchors: R3 credited_at; R4 paid_at, else requested_at; R5 performed_at; R6 executed_at; R8 raised_at; R9 detected_at; R15 placed_at or settled_at, whichever the event reports; R7, R13 and R14, as snapshots, period_end; R1, R2, R10, R11 and R12 are streamed on creation and change.",
+              "x-ctres-req": "C",
+              "x-ctres-condition": "Where mode is continuous or both (§8.4).",
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "enum": [
+                  "R1",
+                  "R2",
+                  "R3",
+                  "R4",
+                  "R5",
+                  "R6",
+                  "R7",
+                  "R8",
+                  "R9",
+                  "R10",
+                  "R11",
+                  "R12",
+                  "R13",
+                  "R14",
+                  "R15"
+                ]
+              },
+              "additionalProperties": {
+                "$ref": "common.schema.json#/$defs/duration"
+              }
+            },
+            "checkpoint": {
+              "description": "Period each stream checkpoint covers: a gaming day, or an hour (§8.4).",
+              "x-ctres-req": "C",
+              "x-ctres-condition": "Where mode is continuous or both (§8.4).",
+              "type": "string",
+              "enum": [
+                "gaming_day",
+                "hour"
+              ]
+            },
+            "bet_level": {
+              "description": "Whether the authority expects bet-level data: R15 Bet Event, the Wagering module, which no conformance level requires on its own (§4.15; §10).",
+              "x-ctres-req": "O",
+              "type": "boolean"
+            },
+            "transport": {
+              "description": "How events travel: pushed by the operator to the authority's endpoint, pulled by the authority from the operator's, or carried by a protocol of the authority's own; informational (§8.4; the reference transport in stream/openapi.yaml).",
+              "x-ctres-req": "O",
+              "type": "string",
+              "enum": [
+                "push",
+                "pull",
+                "authority_protocol"
               ]
             }
           },

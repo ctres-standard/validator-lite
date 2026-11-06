@@ -1,8 +1,10 @@
 """
-CTRES validator-lite: the Structural and Referential classes of validation (CTRES v1.1, §11).
+CTRES validator-lite: the Structural and Referential classes of validation (CTRES v1.1, §11), the checks
+of a stream (§8.4) and the reconciliation of a package with the stream that carried its records.
 
-A package is a directory holding manifest.json and one JSON Lines file per record type (§8.2).
-Each check has an identifier, a class, a severity and the section of the Standard it rests on, so
+A package is a directory holding manifest.json and one JSON Lines file per record type (§8.2). A stream is an
+NDJSON file of events, each an envelope around one record (§8.4). Each check has an identifier, a class
+(structural, referential, stream, reconciliation), a severity and the section of the Standard it rests on, so
 that any finding can be traced and argued. Profile conformance, completeness and the agreement of
 statement totals with the records behind them (including the money bridge of §4.13) are not checked
 here: they depend on profile parameters, tolerances and materiality, and belong to the CTRES
@@ -10,10 +12,11 @@ conformance suite. Where the manifest declares a conformance level (§10), the r
 must be present (STR-09), and a reference to a record type the level does not require and the package does not
 carry is reported as advisory rather than resolved. Packages produced under CTRES v1.0 are validated unchanged.
 
-Import:  from ctres_validator_lite import validate  ->  result dict (see README, "JSON output")
+Import:  from ctres_validator_lite import validate, validate_stream  ->  result dict (see README, "JSON output")
 """
 from __future__ import annotations
 
+import copy
 import csv
 import hashlib
 import io
@@ -21,7 +24,7 @@ import json
 import re
 from calendar import isleap
 from collections import namedtuple
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -113,6 +116,61 @@ RULES = [
      "ggr_declared on each R13 statement equals the formula the statement names, all_in or cash_only, applied "
      "to the statement's own stakes and winnings, exactly",
      "Statements declare a gross gaming revenue that does not follow their own formula"),
+    ("REF-14", "referential", "blocking", "§4.15; §4.1",
+     "Every R15 venue_id is carried by an R1 location",
+     "Bet events cite a venue no R1 location carries"),
+]
+
+# The checks of a stream (§8.4), run by validate_stream and, with --reconcile, alongside the package checks.
+STREAM_RULES = [
+    ("STM-01", "stream", "blocking", "§8.4",
+     "Every line is a JSON object that validates against the stream event envelope: stream_id, sequence, "
+     "emitted_at, licence_number, standard_version, record_type, op and record present and well formed, no "
+     "undefined fields; a checkpoint event carries op create",
+     "Lines are not valid event envelopes"),
+    ("STM-02", "stream", "blocking", "§8.4",
+     "Within each stream, sequence numbers are strictly increasing from line to line, without gaps",
+     "Sequence numbers go backwards or leave gaps"),
+    ("STM-03", "stream", "blocking", "§8.4",
+     "No (stream_id, sequence) pair repeats; a repeat with identical bytes is a redelivery, ignored and reported "
+     "as advisory, a repeat with different bytes a conflict",
+     "A sequence number repeats within a stream"),
+    ("STM-04", "stream", "blocking", "§8.4",
+     "The record of each event validates against the schema of its record_type, or against the checkpoint schema "
+     "for record_type checkpoint; with op void the record carries at least the record's identifier",
+     "Records do not validate against the schema of their record type, or a void carries no identifier"),
+    ("STM-05", "stream", "blocking", "§8.4",
+     "Each checkpoint's first_sequence, last_sequence and event_count match the events of its stream, and its "
+     "chain_hash is the SHA-256 of those event lines as transmitted; a gaming day with events but no checkpoint "
+     "is advisory",
+     "Checkpoints do not match the events they cover, or a day with events has no checkpoint"),
+    ("STM-06", "stream", "advisory", "§8.4",
+     "An event with op update or void names a record identifier an earlier event of the stream created; advisory, "
+     "since the create may predate the file",
+     "Updates or voids name records no earlier event of the file created"),
+    ("STM-07", "stream", "blocking", "§8.4",
+     "Where a maximum latency is given, each event is emitted no later than that duration after its record's "
+     "anchor timestamp: R3 credited_at; R4 paid_at, else requested_at; R5 performed_at; R6 executed_at; R8 "
+     "raised_at; R9 detected_at; R15 settled_at where the event reports it, else placed_at; R7, R13 and R14 "
+     "period_end",
+     "Events are emitted later than the maximum latency allows"),
+]
+
+# The reconciliation of a package with the stream that carried its records (§8.4; §11).
+RECONCILE_RULES = [
+    ("REC-01", "reconciliation", "blocking", "§8.4; §11",
+     "Every record whose final streamed state is live, its last event an op create or update, is in the package",
+     "Streamed records are absent from the package"),
+    ("REC-02", "reconciliation", "blocking", "§8.4; §11",
+     "Every package record of a record type the stream carries was streamed",
+     "Package records of a streamed type were never streamed"),
+    ("REC-03", "reconciliation", "blocking", "§8.4; §11",
+     "Each package record equals the final streamed state of the record, field by field; a record the stream "
+     "withdrew with op void is not in the package",
+     "Package records differ from their final streamed state"),
+    ("REC-04", "reconciliation", "blocking", "§8.4; §11",
+     "The manifest's stream_checkpoints are the checkpoints the stream carries, one for one and field by field",
+     "The manifest's stream checkpoints differ from the stream's"),
 ]
 
 # Record type -> (schema file under schema/, identifier field).
@@ -131,9 +189,20 @@ RECORDS = {
     "R12": ("records/r12_report_reference.schema.json", "report_reference_id"),
     "R13": ("records/r13_gaming_revenue_statement.schema.json", "statement_id"),
     "R14": ("records/r14_venue_count.schema.json", "count_id"),
+    "R15": ("records/r15_bet_event.schema.json", "bet_id"),
 }
 
-SEVERITY = {r[0]: r[2] for r in RULES}
+SEVERITY = {r[0]: r[2] for r in RULES + STREAM_RULES + RECONCILE_RULES}
+
+# The anchor timestamp of each record type for the latency of its events (STM-07; §8.4; §5 Submission latency):
+# the first field present with a timestamp. R15 is settled_at where the event reports it, else placed_at. R1, R2,
+# R10, R11 and R12 are streamed on creation and change and have no anchor; nor has a checkpoint event.
+ANCHORS = {"R3": ("credited_at", "settled_at", "initiated_at"), "R4": ("paid_at", "requested_at"),
+           "R5": ("performed_at",), "R6": ("executed_at",), "R7": ("period_end",), "R8": ("raised_at",),
+           "R9": ("detected_at",), "R13": ("period_end",), "R14": ("period_end",), "R15": ("settled_at", "placed_at")}
+
+# An ISO 8601 duration in weeks, days, hours, minutes and seconds (years and months have no fixed length).
+DURATION = re.compile(r"P(?=\d|T\d)(?:(\d+)W)?(?:(\d+)D)?(?:T(?=\d)(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?")
 
 # Conformance levels of §10, defined by scope: the name of each level and the record types it requires at
 # minimum. The core is the manifest with R3, R4, R7 and R13; the Custody module (R1, R2, R6, R10, R11) joins at
@@ -216,7 +285,8 @@ class Schemas:
         d = Path(schema_dir) if schema_dir else SCHEMA_DIR
         if (d / "schema" / "manifest.schema.json").is_file():   # root of a ctres-standard/schema checkout
             d = d / "schema"
-        needed = ["manifest.schema.json", "common.schema.json"] + [f for f, _ in RECORDS.values()]
+        needed = ["manifest.schema.json", "common.schema.json", "stream/event.schema.json",
+                  "stream/checkpoint.schema.json"] + [f for f, _ in RECORDS.values()]
         if missing := [f for f in needed if not (d / f).is_file()]:
             raise SchemaError(f"{d} does not hold the CTRES schema files (missing {', '.join(missing)})")
         docs = {p.relative_to(d).as_posix(): json.loads(p.read_text(encoding="utf-8")) for p in d.rglob("*.schema.json")}
@@ -226,6 +296,12 @@ class Schemas:
         self.manifest = Draft202012Validator(docs["manifest.schema.json"], registry=registry, format_checker=FORMATS)
         self.records = {t: Draft202012Validator(docs[f], registry=registry, format_checker=FORMATS)
                         for t, (f, _) in RECORDS.items()}
+        # The stream event envelope without its record dispatch (the allOf), so that the envelope is one check
+        # (STM-01) and the record inside it another (STM-04), reported against the schema of its record type.
+        envelope = copy.deepcopy(docs["stream/event.schema.json"])
+        envelope.pop("allOf", None)
+        self.envelope = Draft202012Validator(envelope, registry=registry, format_checker=FORMATS)
+        self.checkpoint = Draft202012Validator(docs["stream/checkpoint.schema.json"], registry=registry, format_checker=FORMATS)
         common = docs["common.schema.json"]["$defs"]
         # Patterns of the decimal and timestamp types: a schema error under one of them is STR-06.
         self.format_patterns = {common[k]["pattern"] for k in ("decimal", "non_negative_decimal", "datetime", "date")}
@@ -301,6 +377,35 @@ def _decimal(value):
     return Decimal(value) if isinstance(value, str) and re.fullmatch(r"-?\d+(\.\d+)?", value) else None
 
 
+def parse_duration(value):
+    """An ISO 8601 duration in weeks, days, hours, minutes and seconds (PT60S, PT5M, P1D) as a timedelta; None if
+    it is not one. Years and months are not accepted: they have no fixed length."""
+    m = DURATION.fullmatch(value) if isinstance(value, str) else None
+    if not m:
+        return None
+    weeks, days, hours, minutes, seconds = (float(g) if g else 0 for g in m.groups())
+    return timedelta(weeks=weeks, days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _ranges(numbers):
+    """Consecutive runs of sorted integers in words: '4', '4 to 6', '4 to 6 and 9'."""
+    runs, start, prev = [], None, None
+    for n in list(numbers) + [None]:
+        if start is None:
+            start = prev = n
+        elif n is not None and n == prev + 1:
+            prev = n
+        else:
+            runs.append(str(start) if start == prev else f"{start} to {prev}")
+            start = prev = n
+    return runs[0] if len(runs) == 1 else ", ".join(runs[:-1]) + " and " + runs[-1]
+
+
+def _json(value):
+    """A value as it appears in a finding: a string as it is, anything else as compact JSON."""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def _path(parts):
     return "/".join(str(p) for p in parts) or None
 
@@ -333,6 +438,8 @@ def describe(err, record):
     if err.validator == "format" or (err.validator in ("anyOf", "oneOf") and isinstance(err.instance, str)
                                      and any(e.validator == "format" for e in err.context)):
         return field, f"{err.instance!r} is not a calendar date"
+    if isinstance(err.schema, dict) and isinstance(err.schema.get("x-ctres-message"), str):
+        return field, err.schema["x-ctres-message"]        # the rule in words, as the schema states it
     if err.schema is False:                    # a field the schema excludes for this direction, kind or status
         field = _path(_find(record, err.instance) or ())
         return field, "field not permitted for this record (excluded by its direction, kind or status)"
@@ -351,13 +458,16 @@ def describe(err, record):
 
 # ------------------------------------------------------------------ validation
 
-def validate(package_dir, schema_dir=None):
-    """Run every check over the package directory and return the result as a dict."""
+def validate(package_dir, schema_dir=None, reconcile=None, max_latency=None):
+    """Run every check over the package directory and return the result as a dict. With reconcile, the path of
+    an NDJSON events file, the stream checks run over that file and the package is reconciled with it (REC-01 to
+    REC-04); max_latency, an ISO 8601 duration, then also applies STM-07 to the stream."""
     pkg = Path(package_dir)
     schemas = Schemas(schema_dir)
-    hits = {r[0]: [] for r in RULES}
-    notes = {r[0]: set() for r in RULES}
-    ran = {r[0]: True for r in RULES}
+    rules = RULES + (STREAM_RULES + RECONCILE_RULES if reconcile is not None else [])
+    hits = {r[0]: [] for r in rules}
+    notes = {r[0]: set() for r in rules}
+    ran = {r[0]: True for r in rules}
 
     def rid(rec):
         value = rec.data.get(RECORDS[rec.type][1])
@@ -398,9 +508,9 @@ def validate(package_dir, schema_dir=None):
         if manifest is not None and not isinstance(manifest, dict):
             fail("STR-08", "manifest.json is not a JSON object", file="manifest.json")
     if not isinstance(manifest, dict):
-        for r in RULES:                                             # nothing else can run
+        for r in rules:                                             # nothing else can run
             ran[r[0]] = r[0] == "STR-08"
-        return _result(pkg, schemas, schema_dir, fingerprint, None, hits, notes, ran)
+        return _result(pkg, schemas, schema_dir, fingerprint, None, hits, notes, ran, rules)
 
     try:
         for err in sorted(schemas.manifest.iter_errors(manifest), key=lambda e: (list(map(str, e.absolute_path)), e.message)):
@@ -789,12 +899,385 @@ def validate(package_dir, schema_dir=None):
             fail("REF-13", f"ggr_declared {rec.data['ggr_declared']} differs from the {rec.data['ggr_formula']} "
                  f"formula on the statement's own fields: {text} = {expected}", rec, field="ggr_declared")
 
-    return _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran)
+    # REF-14: bet events cite a venue an R1 location carries, resolved as REF-11 resolves a venue count's venue
+    for rec in data["R15"]:
+        venue = rec.data.get("venue_id")
+        if isinstance(venue, str) and venue not in venues:
+            if "R1" not in present:
+                unresolved("REF-14", "venue_id", ("R1",))
+            elif not venues:
+                notes["REF-14"].add("venue_id not resolved: no R1 location carries venue_id")
+            else:
+                fail("REF-14", f"venue_id {venue} is carried by no R1 location", rec, field="venue_id")
+
+    # ------------------------------------------------------------ reconciliation with the stream
+    stream = None
+    if reconcile is not None:
+        stream = _read_stream(Path(reconcile), schemas, hits, notes, ran, max_latency)
+        _reconcile(stream, manifest, data, index, present, level, hits, notes)
+
+    return _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran, rules, stream)
 
 
-def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran):
+# ------------------------------------------------------------------ streams (§8.4)
+
+Event = namedtuple("Event", "data line raw stream sequence rtype op rid")
+
+
+class Stream:
+    """What a stream file holds, once read: the events that count (one per stream and sequence, the first of any
+    repeat), the final state of each record, the checkpoints, and the lines each checkpoint covers."""
+
+    def __init__(self, path, digest):
+        self.path, self.fingerprint = path, digest
+        self.lines = 0                       # non-blank lines
+        self.events = []                     # Event, in file order, repeats excluded
+        self.final = {}                      # (record type, identifier) -> Event with the latest state
+        self.checkpoints = []                # (Event, checkpoint record) for every valid checkpoint event
+        self.streams = {}                    # stream_id -> {"lines": {sequence: (line, raw, is checkpoint)}, ...}
+        self.types = {}                      # record type -> number of events
+        self.licences = set()
+        self.max_latency = None
+
+    def summary(self):
+        return {"path": str(self.path), "fingerprint": self.fingerprint, "lines": self.lines,
+                "events": len(self.events), "checkpoints": len(self.checkpoints),
+                "streams": {s: {"first_sequence": info["first"], "last_sequence": info["last"],
+                                "events": info["events"], "checkpoints": info["checkpoints"]}
+                            for s, info in self.streams.items()},
+                "record_types": {t: self.types[t] for t in sorted(self.types, key=lambda t: (t == "checkpoint", int(t[1:]) if t[1:].isdigit() else 0))},
+                "max_latency": self.max_latency}
+
+
+def validate_stream(events_path, schema_dir=None, max_latency=None):
+    """Run the stream checks STM-01 to STM-07 over an NDJSON events file and return the result as a dict.
+    max_latency is an ISO 8601 duration (PT60S); without it STM-07 is not run."""
+    path = Path(events_path)
+    schemas = Schemas(schema_dir)
+    hits = {r[0]: [] for r in STREAM_RULES}
+    notes = {r[0]: set() for r in STREAM_RULES}
+    ran = {r[0]: True for r in STREAM_RULES}
+    stream = _read_stream(path, schemas, hits, notes, ran, max_latency)
+    return _result(None, schemas, schema_dir, None, None, hits, notes, ran, STREAM_RULES, stream)
+
+
+def _read_stream(path, schemas, hits, notes, ran, max_latency):
+    """Read an events file and apply STM-01 to STM-07, recording findings in hits; return the Stream."""
+    latency = None
+    if max_latency is not None:
+        if (latency := parse_duration(max_latency)) is None:
+            raise ValueError(f"{max_latency!r} is not an ISO 8601 duration in weeks, days, hours, minutes and seconds")
+    try:
+        raw_bytes = path.read_bytes()
+    except OSError as exc:
+        raise SchemaError(f"{path} cannot be read ({exc.strerror or exc})") from None
+    stream = Stream(path, hashlib.sha256(raw_bytes).hexdigest())
+    stream.max_latency = max_latency
+    name = path.name
+
+    def fail(rule, detail, ev=None, line=None, field=None, severity=None):
+        """A finding on an event: its line, its record identifier, and the sequence in the detail."""
+        record = None
+        if ev is not None:
+            line, record = ev.line, ev.rid
+            detail = f"sequence {ev.sequence}" + (f" ({record})" if record else "") + f": {detail}"
+        hits[rule].append({"file": name, "line": line, "record": record, "field": field, "detail": detail,
+                           "severity": severity or SEVERITY[rule]})
+
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        fail("STM-01", f"{name}: not valid UTF-8 ({exc.reason} at byte {exc.start})")
+        for rule in ("STM-02", "STM-03", "STM-04", "STM-05", "STM-06", "STM-07"):
+            ran[rule] = False
+            notes[rule].add("not run: the file is not valid UTF-8")
+        return stream
+    if text.startswith(BOM):
+        fail("STM-01", f"{name}: the file begins with a byte order mark (U+FEFF), which a JSON text must not carry "
+             "(RFC 8259 §8.1)", line=1)
+        text = text[1:]
+    if latency is None:
+        ran["STM-07"] = False
+        notes["STM-07"].add("not run: no maximum latency given (--max-latency)")
+
+    seen = {}                                     # (stream_id, sequence) -> (line, raw)
+    created = set()                               # (stream_id, record type, identifier) with an op create seen
+    no_anchor = set()
+    for n, line in enumerate(text.split("\n"), 1):
+        raw = line[:-1] if line.endswith("\r") else line     # the line as transmitted, the line ending aside
+        stripped = raw.strip(JSON_WHITESPACE)
+        if not stripped:
+            continue
+        stream.lines += 1
+
+        # STM-01: the line is a JSON object that validates against the envelope
+        try:
+            obj = loads(stripped)
+        except ValueError as exc:
+            fail("STM-01", f"not valid JSON ({exc})", line=n)
+            continue
+        if not isinstance(obj, dict):
+            fail("STM-01", "not a JSON object", line=n)
+            continue
+        sid, seq, rtype, op, record = (obj.get(k) for k in ("stream_id", "sequence", "record_type", "op", "record"))
+        usable = isinstance(sid, str) and isinstance(seq, int) and not isinstance(seq, bool) and seq >= 1
+        idf = RECORDS[rtype][1] if rtype in RECORDS else None
+        rid = record.get(idf) if idf and isinstance(record, dict) and isinstance(record.get(idf), str) else None
+        ev = Event(obj, n, raw, sid if usable else None, seq if usable else None, rtype, op, rid)
+        for err in sorted(schemas.envelope.iter_errors(obj), key=lambda e: (list(map(str, e.absolute_path)), e.message)):
+            field, msg = describe(err, obj)
+            if err.validator == "additionalProperties" and (m := re.match(r"Additional properties are not allowed \((.+) (?:was|were) unexpected\)$", err.message)):
+                field, msg = None, f"not defined for the envelope: {m.group(1).replace(chr(39), '')}"
+            fail("STM-01", f"{field + ': ' if field else ''}{msg}", ev if usable else None, line=n, field=field)
+        if rtype == "checkpoint" and op in ("update", "void"):
+            fail("STM-01", f"op {op} is not permitted on a checkpoint event: a checkpoint carries op create",
+                 ev if usable else None, line=n, field="op")
+        if not usable:
+            continue                                                # no stream or sequence: nothing to track
+
+        # STM-03: a repeated (stream, sequence) is a redelivery when identical, a conflict when not; either way
+        # the first copy stands and this one is not processed further
+        if (sid, seq) in seen:
+            first_line, first_raw = seen[(sid, seq)]
+            if raw == first_raw:
+                fail("STM-03", f"repeats line {first_line} with identical content: a redelivery, ignored", ev,
+                     severity="advisory")
+            else:
+                fail("STM-03", f"repeats line {first_line} with different content", ev)
+            continue
+        seen[(sid, seq)] = (n, raw)
+        info = stream.streams.setdefault(sid, {"lines": {}, "first": seq, "last": seq, "events": 0, "checkpoints": 0,
+                                               "last_line": n})
+        # STM-02: sequences increase from line to line without gaps; the first event of a stream sets its start
+        if seq in info["lines"]:
+            pass
+        elif seq < info["last"] and info["events"]:
+            fail("STM-02", f"follows sequence {info['last']} (line {info['last_line']}) of stream {sid}: sequences "
+                 "do not increase", ev, field="sequence")
+        elif seq > info["last"] + 1 and info["events"]:
+            missing = _ranges(range(info["last"] + 1, seq))
+            fail("STM-02", f"sequence{'s' if seq - info['last'] > 2 else ''} {missing} of stream {sid} "
+                 f"{'are' if seq - info['last'] > 2 else 'is'} missing between line {info['last_line']} "
+                 f"(sequence {info['last']}) and line {n}", ev, field="sequence")
+        info["lines"][seq] = (n, raw, rtype == "checkpoint")
+        info["first"], info["last"], info["last_line"] = min(info["first"], seq), max(info["last"], seq), n
+        info["events"] += 1
+        stream.events.append(ev)
+        stream.types[rtype if isinstance(rtype, str) else "?"] = stream.types.get(rtype if isinstance(rtype, str) else "?", 0) + 1
+        if isinstance(obj.get("licence_number"), str):
+            stream.licences.add(obj["licence_number"])
+
+        # STM-04: the record validates against the schema of its type; a void carries the identifier
+        if not isinstance(record, dict) or op not in ("create", "update", "void") or \
+                (rtype not in RECORDS and rtype != "checkpoint"):
+            continue                                                # reported by STM-01
+        if rtype == "checkpoint":
+            errors = sorted(schemas.checkpoint.iter_errors(record), key=lambda e: (list(map(str, e.absolute_path)), e.message))
+            for err in errors:
+                field, msg = describe(err, record)
+                field = f"record/{field}" if field else "record"
+                fail("STM-04", f"{field}: {msg}", ev, field=field)
+            if not errors and op == "create":
+                stream.checkpoints.append((ev, record))
+                info["checkpoints"] += 1
+            continue
+        if op == "void":
+            if rid is None:
+                fail("STM-04", f"op void: the record carries no {idf}, the identifier of an {rtype} record", ev,
+                     field=f"record/{idf}")
+        else:
+            try:
+                for err in sorted(schemas.records[rtype].iter_errors(record), key=lambda e: (list(map(str, e.absolute_path)), e.message)):
+                    if err.validator == "unevaluatedProperties" and not err.absolute_path:
+                        if extra := schemas.undefined_fields(rtype, record):
+                            fail("STM-04", f"not defined for this record: {', '.join(extra)}", ev,
+                                 field=f"record/{extra[0]}" if len(extra) == 1 else "record")
+                        continue
+                    field, msg = describe(err, record)
+                    field = f"record/{field}" if field else "record"
+                    fail("STM-04", f"{field}: {msg}", ev, field=field)
+            except RecursionError:
+                fail("STM-04", "values are nested too deeply to be validated", ev, field="record")
+        if rid is None:
+            continue                                                # no identifier: STM-04 (or STM-01) said so
+        # STM-06: an update or void names a record an earlier event created
+        key = (sid, rtype, rid)
+        if op == "create":
+            created.add(key)
+        elif key not in created:
+            fail("STM-06", f"op {op} names an {rtype} record no earlier event of stream {sid} created (the create "
+                 "may predate the file)", ev, field=f"record/{idf}")
+            created.add(key)
+        stream.final[(rtype, rid)] = ev
+
+        # STM-07: the event is emitted within the maximum latency of its anchor
+        if latency is None:
+            continue
+        if rtype not in ANCHORS:
+            no_anchor.add(rtype)
+            continue
+        anchor = next((k for k in ANCHORS[rtype] if parse_dt(record.get(k))), None)
+        emitted = parse_dt(obj.get("emitted_at"))
+        if anchor and emitted is not None and emitted - parse_dt(record[anchor]) > latency:
+            late = emitted - parse_dt(record[anchor])
+            fail("STM-07", f"emitted_at {obj['emitted_at']} is {late} after {anchor} {record[anchor]}, more than the "
+                 f"maximum latency {max_latency}", ev, field="emitted_at")
+
+    for rtype in sorted(no_anchor, key=lambda t: int(t[1:])):
+        notes["STM-07"].add(f"{rtype} events are not tested: {rtype} is streamed on creation and change and has no "
+                            "anchor timestamp")
+
+    # STM-05: each checkpoint matches the events it covers; days with events but no checkpoint are advisory
+    covered = {sid: [] for sid in stream.streams}
+    for ev, cp in stream.checkpoints:
+        sid, first, last, count = cp["stream_id"], cp["first_sequence"], cp["last_sequence"], cp["event_count"]
+        if sid != ev.stream:
+            fail("STM-05", f"the checkpoint names stream {sid} but was emitted on stream {ev.stream}", ev,
+                 field="record/stream_id")
+        if cp["licence_number"] != ev.data.get("licence_number"):
+            fail("STM-05", f"the checkpoint names licence {cp['licence_number']} but the event licence "
+                 f"{ev.data.get('licence_number')}", ev, field="record/licence_number")
+        if last < first - 1:
+            fail("STM-05", f"last_sequence {last} is below first_sequence {first}", ev, field="record/last_sequence")
+            continue
+        if count != last - first + 1:
+            fail("STM-05", f"event_count {count} differs from last_sequence − first_sequence + 1 = {last - first + 1}",
+                 ev, field="record/event_count")
+        lines = stream.streams.get(sid, {"lines": {}})["lines"]
+        if missing := [s for s in range(first, last + 1) if s not in lines]:
+            fail("STM-05", f"sequence{'s' if len(missing) > 1 else ''} {_ranges(missing)} of stream {sid}, covered "
+                 f"by the checkpoint, {'were' if len(missing) > 1 else 'was'} not seen; chain_hash not recomputed",
+                 ev, field="record/chain_hash")
+        else:
+            digest = hashlib.sha256(b"".join(lines[s][1].encode("utf-8") + b"\n" for s in range(first, last + 1)
+                                             if not lines[s][2])).hexdigest()
+            if digest != cp["chain_hash"]:
+                fail("STM-05", f"chain_hash {cp['chain_hash']} is not the SHA-256 of the event lines {first} to "
+                     f"{last} of stream {sid} as transmitted, {digest}", ev, field="record/chain_hash")
+        covered.setdefault(sid, []).append((first, last))
+    for sid, info in stream.streams.items():
+        days = {}
+        for ev in stream.events:
+            if ev.stream == sid and ev.rtype != "checkpoint" and not any(a <= ev.sequence <= b for a, b in covered[sid]):
+                emitted = ev.data.get("emitted_at")
+                day = emitted[:10] if isinstance(emitted, str) and parse_dt(emitted) else "an unreadable date"
+                days.setdefault(day, []).append(ev.sequence)
+        for day, seqs in sorted(days.items()):
+            fail("STM-05", f"stream {sid}: {len(seqs)} event{'s' if len(seqs) != 1 else ''} of {day} (sequence"
+                 f"{'s' if len(seqs) != 1 else ''} {_ranges(sorted(seqs))}) {'are' if len(seqs) != 1 else 'is'} "
+                 "covered by no checkpoint", line=stream.streams[sid]["lines"][seqs[-1]][0], severity="advisory")
+    return stream
+
+
+def _reconcile(stream, manifest, data, index, present, level, hits, notes):
+    """REC-01 to REC-04: the package against the final state of the stream and its checkpoints."""
+    name = stream.path.name
+
+    def fail(rule, detail, file=None, line=None, record=None, field=None, severity=None):
+        hits[rule].append({"file": file, "line": line, "record": record, "field": field, "detail": detail,
+                           "severity": severity or SEVERITY[rule]})
+
+    def rid(rec):
+        value = rec.data.get(RECORDS[rec.type][1])
+        return value if isinstance(value, str) else None
+
+    streamed = {rtype for rtype, _ in stream.final}
+
+    # REC-01: every live final state is in the package; interim statements are superseded by the period statement
+    absent, interim = set(), 0
+    for (rtype, key), ev in stream.final.items():
+        if ev.op == "void":
+            continue
+        if rtype == "R13" and ev.data["record"].get("statement_kind") == "interim":
+            interim += 1
+            continue
+        if rtype not in present:
+            absent.add(rtype)
+        elif key not in index[rtype]:
+            fail("REC-01", f"sequence {ev.sequence} ({key}): the final state of this {rtype} record is not in the "
+                 "package", file=name, line=ev.line, record=key, field=f"record/{RECORDS[rtype][1]}")
+    for rtype in sorted(absent, key=lambda t: int(t[1:])):
+        if level is not None and rtype not in LEVELS[level][1]:
+            fail("REC-01", f"{rtype} records — not reconciled: {rtype} is not required at {level} and is not in the "
+                 "package", severity="advisory")
+        else:
+            notes["REC-01"].add(f"{rtype} records not reconciled: the package carries no {rtype} file")
+    if interim:
+        notes["REC-01"].add(f"{interim} R13 interim statement{'s are' if interim != 1 else ' is'} superseded by the "
+                            "period statement and not expected in the package")
+
+    # REC-02 and REC-03: every package record of a streamed type was streamed, and equals its final state
+    for rtype in RECORDS:
+        if rtype not in present:
+            continue
+        if rtype not in streamed:
+            if data[rtype]:
+                notes["REC-02"].add(f"{rtype} is not streamed: its records are not reconciled")
+            continue
+        for rec in data[rtype]:
+            key = rid(rec)
+            if key is None:
+                continue                                            # STR-04
+            ev = stream.final.get((rtype, key))
+            if ev is None:
+                fail("REC-02", f"{key}: never streamed", file=rec.file, line=rec.line, record=key)
+            elif ev.op == "void":
+                fail("REC-03", f"{key}: withdrawn by op void (sequence {ev.sequence}) but carried by the package",
+                     file=rec.file, line=rec.line, record=key)
+            elif rec.data != ev.data["record"]:
+                fail("REC-03", f"{key}: differs from the final streamed state (sequence {ev.sequence}): "
+                     + _diff(rec.data, ev.data["record"]), file=rec.file, line=rec.line, record=key)
+
+    # REC-04: the manifest's checkpoints are the stream's, one for one and field by field
+    listed = manifest.get("stream_checkpoints")
+    listed = [cp for cp in listed if isinstance(cp, dict)] if isinstance(listed, list) else []
+
+    def key_of(cp):
+        return cp.get("stream_id"), cp.get("first_sequence"), cp.get("last_sequence")
+
+    def words(cp):
+        return f"stream {cp.get('stream_id')}, sequences {cp.get('first_sequence')} to {cp.get('last_sequence')}"
+
+    in_stream = {key_of(cp): (ev, cp) for ev, cp in stream.checkpoints}
+    in_manifest = {key_of(cp): i for i, cp in enumerate(listed)}
+    for i, cp in enumerate(listed):
+        found = in_stream.get(key_of(cp))
+        if found is None:
+            fail("REC-04", f"stream_checkpoints/{i} ({words(cp)}): the stream carries no such checkpoint",
+                 file="manifest.json", field=f"stream_checkpoints/{i}")
+        elif cp != found[1]:
+            fail("REC-04", f"stream_checkpoints/{i} ({words(cp)}) differs from the checkpoint the stream carries "
+                 f"(sequence {found[0].sequence}): " + _diff(cp, found[1], "manifest", "stream"),
+                 file="manifest.json", field=f"stream_checkpoints/{i}")
+    for key, (ev, cp) in in_stream.items():
+        if key not in in_manifest:
+            fail("REC-04", f"sequence {ev.sequence}: the checkpoint ({words(cp)}) is not listed in the manifest's "
+                 f"stream_checkpoints{', which the manifest does not carry' if 'stream_checkpoints' not in manifest else ''}",
+                 file=name, line=ev.line, field="record")
+
+
+def _diff(ours, theirs, here="package", there="stream", limit=6):
+    """Field-level differences between two records, in words."""
+    absent = object()
+    keys = [k for k in list(ours) + [k for k in theirs if k not in ours]
+            if ours.get(k, absent) != theirs.get(k, absent)]
+    parts = []
+    for k in keys[:limit]:
+        a, b = ours.get(k, absent), theirs.get(k, absent)
+        if a is absent:
+            parts.append(f"{k} absent from the {here}, {_json(b)} in the {there}")
+        elif b is absent:
+            parts.append(f"{k} {_json(a)} in the {here}, absent from the {there}")
+        else:
+            parts.append(f"{k} {_json(a)} in the {here}, {_json(b)} in the {there}")
+    if len(keys) > limit:
+        parts.append(f"and {len(keys) - limit} more field{'s' if len(keys) - limit != 1 else ''}")
+    return "; ".join(parts)
+
+
+def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran, rules, stream=None):
     checks = []
-    for rule_id, cls, severity, basis, requirement, failure in RULES:
+    for rule_id, cls, severity, basis, requirement, failure in rules:
         findings = hits[rule_id]
         checks.append({"id": rule_id, "class": cls, "severity": severity, "basis": basis,
                        "requirement": requirement, "failure": failure,
@@ -804,15 +1287,30 @@ def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran):
     advisory = sum(f["severity"] == "advisory" for c in checks for f in c["findings"])
     keys = ("package_id", "licence_number", "licensee", "profile_id", "profile_version",
             "period_start", "period_end", "standard_version", "conformance_level_declared", "synthetic")
-    return {
+    result = {
         "validator": "ctres-validator-lite",
         "validator_version": __version__,
         "standard_version": STANDARD_VERSION,
         "schema_version": None if schema_dir else SCHEMA_VERSION,
         "schema_dir": str(schemas.dir) if schema_dir else None,
-        "package": str(pkg),
-        "fingerprint": fingerprint,
-        "manifest": {k: manifest.get(k) for k in keys} if manifest is not None else None,
+    }
+    if pkg is not None:
+        result.update({"package": str(pkg), "fingerprint": fingerprint,
+                       "manifest": {k: manifest.get(k) for k in keys} if manifest is not None else None})
+    if stream is not None:
+        result["stream"] = stream.summary()
+    not_checked = ("Reconciliation of statement totals against the records behind them, including the money "
+                   "bridge of §4.13 between R13 and R3, R4 and R7, the agreement of R14 counts with the R13 "
+                   "venue line and with the bankings in R6 and R7, and the agreement of R13 lines with the R15 bets "
+                   "behind them; whether an R13 jurisdiction_category is in the profile's taxonomy; and the profile "
+                   "conformance and completeness classes of §11. These belong to the CTRES conformance suite, "
+                   f"available on request: {CONFORMANCE_SUITE}")
+    if pkg is None:
+        not_checked = ("The latency of each record type against the profile's own latency parameter (one maximum "
+                       "applies to every event with --max-latency); the agreement of the stream with the period "
+                       "package, which --reconcile tests; and the profile conformance and completeness classes of "
+                       f"§11, which belong to the CTRES conformance suite, available on request: {CONFORMANCE_SUITE}")
+    result.update({
         "result": "fail" if blocking else "pass",
         "summary": {"checks": len(checks),
                     "passed": sum(c["status"] == "pass" for c in checks),
@@ -820,9 +1318,6 @@ def _result(pkg, schemas, schema_dir, fingerprint, manifest, hits, notes, ran):
                     "not_run": sum(c["status"] == "not_run" for c in checks),
                     "blocking_findings": blocking, "advisory_findings": advisory},
         "checks": checks,
-        "not_checked": ("Reconciliation of statement totals against the records behind them, including the money "
-                        "bridge of §4.13 between R13 and R3, R4 and R7 and the agreement of R14 counts with the R13 "
-                        "venue line and with the bankings in R6 and R7; whether an R13 jurisdiction_category is in "
-                        "the profile's taxonomy; and the profile conformance and completeness classes of §11. These "
-                        f"belong to the CTRES conformance suite, available on request: {CONFORMANCE_SUITE}"),
-    }
+        "not_checked": not_checked,
+    })
+    return result

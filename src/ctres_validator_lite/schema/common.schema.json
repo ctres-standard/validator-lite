@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ctres.org/schema/1.1/common.schema.json",
   "title": "CTRES v1.1 common definitions",
-  "description": "Types and enumerations shared by the CTRES v1.1 record, manifest and profile schemas. Common Transaction Reporting and Evidence Standard v1.1: the universal edition of 2 October 2026 (v1.0) extended with R13 Gaming Revenue Statement (§4.13), R14 Venue Count (§4.14) and the Revenue and levy profile parameters (§5). Section references (§) are to that text.",
+  "description": "Types and enumerations shared by the CTRES v1.1 record, manifest, profile and stream schemas. Common Transaction Reporting and Evidence Standard v1.1: the universal edition of 2 October 2026 (v1.0) extended with R13 Gaming Revenue Statement (§4.13), R14 Venue Count (§4.14), R15 Bet Event (§4.15), the streaming mode of §8.4 and the Revenue and levy and stream parameters of a profile (§5). Section references (§) are to that text.",
   "$defs": {
     "decimal": {
       "description": "A decimal number written as a JSON string, never as a JSON number, so that no floating-point rounding can occur (§3 Currency-aware; §8.2). A leading minus sign is permitted.",
